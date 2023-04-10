@@ -9,6 +9,13 @@ import torch
 import torchmetrics
 import pytorch_lightning as pl
 
+# 2023-04-10 모듈 로딩 추가, callback, wandb
+import wandb
+
+from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+from pytorch_lightning.loggers import WandbLogger
+
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, inputs, targets=[]):
@@ -175,19 +182,40 @@ if __name__ == '__main__':
     parser.add_argument('--max_epoch', default=1, type=int)
     parser.add_argument('--shuffle', default=True)
     parser.add_argument('--learning_rate', default=1e-5, type=float)
-    parser.add_argument('--train_path', default='train.csv')
-    parser.add_argument('--dev_path', default='dev.csv')
-    parser.add_argument('--test_path', default='dev.csv')
-    parser.add_argument('--predict_path', default='test.csv')
+    parser.add_argument('--train_path', default='./data/train.csv')
+    parser.add_argument('--dev_path', default='./data/dev.csv')
+    parser.add_argument('--test_path', default='./data/dev.csv')
+    parser.add_argument('--predict_path', default='./data/test.csv')
+    
+    parser.add_argument('--wandb_username', default='hsp9308')
+    parser.add_argument('--wandb_project_name', default='STS')
+    parser.add_argument('--wandb_entity', default='hsp9308')
+    
     args = parser.parse_args(args=[])
+    
+    # 2023-04-10: 모델에 대한 Callback을 추가합니다.
+    # Pytorch Lightning에서 지원하는 Model Checkpoint 저장 및 EarlyStopping을 추가해줍니다.
+    cp_callback = ModelCheckpoint(monitor='val_pearson',    # Pearson coefficient를 기준으로 저장
+                                  verbose=False,            # 중간 출력문을 출력할지 여부. False 시, 없음.
+                                  save_last=True,           # last.ckpt 로 저장됨
+                                  save_top_k=1,             # k개의 최고 성능 체크 포인트를 저장하겠다.
+                                  save_weights_only=True,   # Weight만 저장할지, 학습 관련 정보도 저장할지 여부.
+                                  mode='max'                # 'max' : monitor metric이 증가하면 저장.
+                                  )
+    early_stop_callback = EarlyStopping(monitor='val_pearson', 
+                                        patience=2,         # 2번 이상 validation 성능이 안좋아지면 early stop
+                                        mode='max'          # 'max' : monitor metric은 최대화되어야 함.
+                                        )
 
     # dataloader와 model을 생성합니다.
     dataloader = Dataloader(args.model_name, args.batch_size, args.shuffle, args.train_path, args.dev_path,
                             args.test_path, args.predict_path)
     model = Model(args.model_name, args.learning_rate)
 
-    # gpu가 없으면 'gpus=0'을, gpu가 여러개면 'gpus=4'처럼 사용하실 gpu의 개수를 입력해주세요
-    trainer = pl.Trainer(gpus=1, max_epochs=args.max_epoch, log_every_n_steps=1)
+    # gpu가 없으면 accelerator='cpu', 있으면 accelerator='gpu'
+    trainer = pl.Trainer(accelerator='gpu', max_epochs=args.max_epoch, log_every_n_steps=1,
+                         callbacks=[cp_callback, early_stop_callback],  # 2023-04-10: callback 추가
+                         )
 
     # Train part
     trainer.fit(model=model, datamodule=dataloader)

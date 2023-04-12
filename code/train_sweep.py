@@ -1,4 +1,6 @@
 import argparse
+import datetime
+import os
 
 import pandas as pd
 
@@ -8,6 +10,15 @@ import transformers
 import torch
 import torchmetrics
 import pytorch_lightning as pl
+
+# 2023-04-10 모듈 로딩 추가, callback, wandb
+import wandb
+import numpy as np
+import random
+
+from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+from pytorch_lightning.loggers import WandbLogger
 
 
 class Dataset(torch.utils.data.Dataset):
@@ -123,6 +134,7 @@ class Model(pl.LightningModule):
         self.plm = transformers.AutoModelForSequenceClassification.from_pretrained(
             pretrained_model_name_or_path=model_name, num_labels=1)
         # Loss 계산을 위해 사용될 L1Loss를 호출합니다.
+        # L1 loss가 아닌 MSE loss (=L2 loss)도 사용해봅시다. 
         self.loss_func = torch.nn.L1Loss()
 
     def forward(self, x):
@@ -165,38 +177,130 @@ class Model(pl.LightningModule):
         return optimizer
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':    
     # 하이퍼 파라미터 등 각종 설정값을 입력받습니다
     # 터미널 실행 예시 : python3 run.py --batch_size=64 ...
     # 실행 시 '--batch_size=64' 같은 인자를 입력하지 않으면 default 값이 기본으로 실행됩니다
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_name', default='klue/roberta-small', type=str)
+    parser.add_argument('--model_name', default='klue/roberta-large', type=str)
     parser.add_argument('--batch_size', default=16, type=int)
     parser.add_argument('--max_epoch', default=1, type=int)
     parser.add_argument('--shuffle', default=True)
     parser.add_argument('--learning_rate', default=1e-5, type=float)
-    parser.add_argument('--train_path', default='./data/train.csv')
-    parser.add_argument('--dev_path', default='./data/dev.csv')
-    parser.add_argument('--test_path', default='./data/test.csv')
-    parser.add_argument('--predict_path', default='./data/test.csv')
+    parser.add_argument('--train_path', default='./new_data/train.csv')
+    parser.add_argument('--dev_path', default='./new_data/dev.csv')
+    parser.add_argument('--test_path', default='./new_data/dev.csv')
+    parser.add_argument('--predict_path', default='./new_data/test.csv')
+    
+    parser.add_argument('--wandb_username', default='hsp9308')
+    parser.add_argument('--wandb_project', default='STS')
+    parser.add_argument('--wandb_entity', default='hsp9308')
+    parser.add_argument('--random', default=False, type=bool)
+       
+    date = datetime.datetime.now().strftime('%Y-%m-%d')
     args = parser.parse_args()
+    print(args.model_name)
+    print(args.batch_size)
+    print(args.learning_rate)
+    
+    if args.random:
+        global_seed = 777
+        print("="*50,"\nNOTICE: Fixing random seed to", global_seed, "\n" + "="*50, "\n")
+        torch.manual_seed(global_seed)
+        torch.cuda.manual_seed(global_seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        np.random.seed(global_seed)
+        random.seed(global_seed)
+    
+    # 2023-04-10: 모델에 대한 Callback을 추가합니다.
+    # Pytorch Lightning에서 지원하는 Model Checkpoint 저장 및 EarlyStopping을 추가해줍니다.
+    cp_callback = ModelCheckpoint(monitor='val_pearson',    # Pearson coefficient를 기준으로 저장
+                                  verbose=False,            # 중간 출력문을 출력할지 여부. False 시, 없음.
+                                  save_last=True,           # last.ckpt 로 저장됨
+                                  save_top_k=1,             # k개의 최고 성능 체크 포인트를 저장하겠다.
+                                  save_weights_only=True,   # Weight만 저장할지, 학습 관련 정보도 저장할지 여부.
+                                  mode='max'                # 'max' : monitor metric이 증가하면 저장.
+                                  )
+    early_stop_callback = EarlyStopping(monitor='val_pearson', 
+                                        patience=2,         # 2번 이상 validation 성능이 안좋아지면 early stop
+                                        mode='max'          # 'max' : monitor metric은 최대화되어야 함.
+                                        )
 
     # dataloader와 model을 생성합니다.
-    dataloader = Dataloader(args.model_name, args.batch_size, args.shuffle, args.train_path, args.dev_path,
-                            args.test_path, args.predict_path)
+    # dataloader = Dataloader(args.model_name, args.batch_size, args.shuffle, args.train_path, args.dev_path,
+    #                         args.test_path, args.predict_path)
+    # model = Model(args.model_name, args.learning_rate)
 
-    # gpu가 없으면 'gpus=0'을, gpu가 여러개면 'gpus=4'처럼 사용하실 gpu의 개수를 입력해주세요
-    trainer = pl.Trainer(accelerator='gpu', max_epochs=args.max_epoch, log_every_n_steps=1)
+    sweep_config = {
+        'method': 'random',
+        'parameters': {
+            'lr':{
+                'value': args.learning_rate
+                # 'distribution': 'uniform',
+                # 'min': args.learning_rate,
+                # 'max': 5.0*args.learning_rate,
+            },
+            'batch_size':{
+                'value': args.batch_size
+            },
+        },
+        'name' : args.model_name.replace('/','_'),
+        'metric' : {'name':'val_pearson', 'goal':'maximize'},
+        # 'early_terminate' : {'type' : 'hyperband', 'max_iter': 10, 's': 2, 'eta': 3}, # Hyperparameter tuning details
+        'entity': 'hsp9308', 
+        'project': args.model_name.replace('/','_')
+    }
 
-    # Inference part
-    # 저장된 모델로 예측을 진행합니다.
-    model = torch.load(args.model_name.replace('/','-')+'_base.pt')
-    predictions = trainer.predict(model=model, datamodule=dataloader)
+    wandb.login(key='6647e7f61a07d44fc1c727d6dc54f391aa44f527')
 
-    # 예측된 결과를 형식에 맞게 반올림하여 준비합니다.
-    predictions = list(round(float(i), 1) for i in torch.cat(predictions))
+    def sweep_train(config=None):
+        wandb.init(config=config)
+        config = wandb.config
+        dataloader = Dataloader(args.model_name, config.batch_size, args.shuffle, args.train_path, args.dev_path, 
+                                args.test_path, args.predict_path)
+        model = Model(args.model_name, config.lr)
+        wandb_logger = WandbLogger(
+            log_model="all",
+            name=f'{args.model_name.replace("/","-")}_{args.batch_size}_{config.lr:.3e}_{date}',
+            project=args.model_name.replace('/','-'), 
+            entity=args.wandb_entity
+        )
+        trainer = pl.Trainer(accelerator='gpu', devices=1, max_epochs=5, log_every_n_steps=2, logger=wandb_logger, 
+                             callbacks=[cp_callback,
+                                        early_stop_callback]
+                             )
+        
+        trainer.fit(model=model, datamodule=dataloader)
+        trainer.test(model=model, datamodule=dataloader)
+        
+        # logging
+        output_dir_path = 'output'
+        if not os.path.exists(output_dir_path):
+            os.makedirs(output_dir_path)
+            
+        output_path = os.path.join(output_dir_path, f'{args.model_name.replace("/","-")}_{args.batch_size}_{config.lr:.3e}_{date}_model.pt')
+        torch.save(model, output_path)
+        
+    sweep_id = wandb.sweep(
+        sweep=sweep_config,
+        project=args.model_name.replace('/','-')
+    )
+    wandb.agent(
+        sweep_id=sweep_id,
+        function=sweep_train,
+        count=1
+    )
 
-    # output 형식을 불러와서 예측된 결과로 바꿔주고, output.csv로 출력합니다.
-    output = pd.read_csv('./data/sample_submission.csv')
-    output['target'] = predictions
-    output.to_csv('output.csv', index=False)
+
+    # # gpu가 없으면 accelerator='cpu', 있으면 accelerator='gpu'
+    # trainer = pl.Trainer(accelerator='gpu', max_epochs=args.max_epoch, log_every_n_steps=1,
+    #                      callbacks=[cp_callback, early_stop_callback],  # 2023-04-10: callback 추가
+    #                      )
+
+    # # Train part
+    # trainer.fit(model=model, datamodule=dataloader)
+    # trainer.test(model=model, datamodule=dataloader)
+
+    # # 학습이 완료된 모델을 저장합니다.
+    # torch.save(model, 'model.pt')

@@ -1,4 +1,6 @@
 import argparse
+import datetime
+import os
 
 import pandas as pd
 
@@ -11,6 +13,8 @@ import pytorch_lightning as pl
 
 # 2023-04-10 모듈 로딩 추가, callback, wandb
 import wandb
+import numpy as np
+import random
 
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
@@ -56,6 +60,7 @@ class Dataloader(pl.LightningDataModule):
         self.target_columns = ['label']
         self.delete_columns = ['id']
         self.text_columns = ['sentence_1', 'sentence_2']
+        self.tokenizer.add_tokens(['<PERSON>'])
 
     def tokenizing(self, dataframe):
         data = []
@@ -119,7 +124,7 @@ class Dataloader(pl.LightningDataModule):
 
 
 class Model(pl.LightningModule):
-    def __init__(self, model_name, lr):
+    def __init__(self, model_name, lr, loss="L1"):
         super().__init__()
         self.save_hyperparameters()
 
@@ -130,7 +135,11 @@ class Model(pl.LightningModule):
         self.plm = transformers.AutoModelForSequenceClassification.from_pretrained(
             pretrained_model_name_or_path=model_name, num_labels=1)
         # Loss 계산을 위해 사용될 L1Loss를 호출합니다.
-        self.loss_func = torch.nn.L1Loss()
+        # L1 loss가 아닌 MSE loss (=L2 loss)도 사용해봅시다. 
+        if loss == "MSE":
+            self.loss_func = torch.nn.MSELoss()
+        else:
+            self.loss_func = torch.nn.L1Loss()
 
     def forward(self, x):
         x = self.plm(x)['logits']
@@ -152,6 +161,7 @@ class Model(pl.LightningModule):
         self.log("val_loss", loss)
 
         self.log("val_pearson", torchmetrics.functional.pearson_corrcoef(logits.squeeze(), y.squeeze()))
+#        self.log("val_spearman", torchmetrics.functional.spearman_corrcoef(logits.squeeze(), y.squeeze()))
 
         return loss
 
@@ -160,6 +170,7 @@ class Model(pl.LightningModule):
         logits = self(x)
 
         self.log("test_pearson", torchmetrics.functional.pearson_corrcoef(logits.squeeze(), y.squeeze()))
+#        self.log("test_spearman", torchmetrics.functional.spearman_corrcoef(logits.squeeze(), y.squeeze()))
 
     def predict_step(self, batch, batch_idx):
         x = batch
@@ -172,26 +183,43 @@ class Model(pl.LightningModule):
         return optimizer
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':    
     # 하이퍼 파라미터 등 각종 설정값을 입력받습니다
     # 터미널 실행 예시 : python3 run.py --batch_size=64 ...
     # 실행 시 '--batch_size=64' 같은 인자를 입력하지 않으면 default 값이 기본으로 실행됩니다
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_name', default='klue/roberta-small', type=str)
+    parser.add_argument('--model_name', default='klue/roberta-large', type=str)
     parser.add_argument('--batch_size', default=16, type=int)
-    parser.add_argument('--max_epoch', default=1, type=int)
+    parser.add_argument('--max_epoch', default=5, type=int)
     parser.add_argument('--shuffle', default=True)
     parser.add_argument('--learning_rate', default=1e-5, type=float)
+    parser.add_argument('--data_path', default='./data/')
     parser.add_argument('--train_path', default='./data/train.csv')
     parser.add_argument('--dev_path', default='./data/dev.csv')
     parser.add_argument('--test_path', default='./data/dev.csv')
     parser.add_argument('--predict_path', default='./data/test.csv')
-    
+    parser.add_argument('--loss', default='L1', type=str)
     parser.add_argument('--wandb_username', default='hsp9308')
-    parser.add_argument('--wandb_project_name', default='STS')
+    parser.add_argument('--wandb_project', default='model-comparing')
     parser.add_argument('--wandb_entity', default='hsp9308')
+    parser.add_argument('--random', default=False, type=bool)
+       
+    date = datetime.datetime.now().strftime('%Y-%m-%d')
+    args = parser.parse_args()
+    print(args.model_name)
+    print(args.batch_size)
+    print(args.learning_rate)
+    print(args.loss)
     
-    args = parser.parse_args(args=[])
+    if args.random:
+        global_seed = 777
+        print("="*50,"\nNOTICE: Fixing random seed to", global_seed, "\n" + "="*50, "\n")
+        torch.manual_seed(global_seed)
+        torch.cuda.manual_seed(global_seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        np.random.seed(global_seed)
+        random.seed(global_seed)
     
     # 2023-04-10: 모델에 대한 Callback을 추가합니다.
     # Pytorch Lightning에서 지원하는 Model Checkpoint 저장 및 EarlyStopping을 추가해줍니다.
@@ -208,13 +236,27 @@ if __name__ == '__main__':
                                         )
 
     # dataloader와 model을 생성합니다.
-    dataloader = Dataloader(args.model_name, args.batch_size, args.shuffle, args.train_path, args.dev_path,
-                            args.test_path, args.predict_path)
-    model = Model(args.model_name, args.learning_rate)
+    # dataloader = Dataloader(args.model_name, args.batch_size, args.shuffle, args.train_path, args.dev_path,
+    #                         args.test_path, args.predict_path)
+    # model = Model(args.model_name, args.learning_rate)
 
-    # gpu가 없으면 accelerator='cpu', 있으면 accelerator='gpu'
+    wandb.login(key='6647e7f61a07d44fc1c727d6dc54f391aa44f527')
+    model_name = args.model_name
+    wandb_logger = WandbLogger(
+        log_model="all",
+        name=f'{args.model_name.replace("/","-")}_{args.batch_size}_{args.learning_rate:.3e}_{args.loss}_{date}',
+        project=args.wandb_project+'_'+args.loss, 
+        entity=args.wandb_entity
+    )
+
+    model = Model(args.model_name, args.learning_rate, args.loss)
+    dataloader = Dataloader(args.model_name, args.batch_size, args.shuffle, args.train_path, args.dev_path, 
+                                    args.test_path, args.predict_path)
+
+    # # gpu가 없으면 accelerator='cpu', 있으면 accelerator='gpu'
     trainer = pl.Trainer(accelerator='gpu', max_epochs=args.max_epoch, log_every_n_steps=1,
                          callbacks=[cp_callback, early_stop_callback],  # 2023-04-10: callback 추가
+                         logger=wandb_logger
                          )
 
     # Train part
@@ -222,4 +264,4 @@ if __name__ == '__main__':
     trainer.test(model=model, datamodule=dataloader)
 
     # 학습이 완료된 모델을 저장합니다.
-    torch.save(model, 'model.pt')
+    torch.save(model, args.model_name.replace("/","-")+'_'+args.loss+'_base.pt')

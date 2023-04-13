@@ -49,6 +49,8 @@ class Dataloader(pl.LightningDataModule):
         self.target_columns = ['label']
         self.delete_columns = ['id']
         self.text_columns = ['sentence_1', 'sentence_2']
+        
+        self.tokenizer.add_special_tokens({'additional_special_tokens': ['<PERSON>']})
 
     def tokenizing(self, dataframe):
         data = []
@@ -175,34 +177,33 @@ if __name__ == '__main__':
     parser.add_argument('--max_epoch', default=1, type=int)
     parser.add_argument('--shuffle', default=True)
     parser.add_argument('--learning_rate', default=1e-5, type=float)
-    parser.add_argument('--train_path', default='./data/train.csv')
-    parser.add_argument('--dev_path', default='./data/dev.csv')
-    parser.add_argument('--test_path', default='./data/test.csv')
-    parser.add_argument('--predict_path', default='./data/test.csv')
-    args = parser.parse_args(args=[])
+    parser.add_argument('--data_path', default='./data/', type=str)
+    args = parser.parse_args()
+
+    train_path = args.data_path + 'train.csv'
+    dev_path = args.data_path + 'dev.csv'
+    test_path = args.data_path + 'test.csv'
+    predict_path = args.data_path + 'test.csv'
 
     # dataloader와 model을 생성합니다.
-    dataloader = Dataloader(args.model_name, args.batch_size, args.shuffle, args.train_path, args.dev_path,
-                            args.test_path, args.predict_path)
+    dataloader = Dataloader(args.model_name, args.batch_size, args.shuffle, train_path, dev_path,
+                            test_path, predict_path)
 
-    # gpu가 없으면 'gpus=0'을, gpu가 여러개면 'gpus=4'처럼 사용하실 gpu의 개수를 입력해주세요
-    trainer = pl.Trainer(gpus=1, max_epochs=args.max_epoch, log_every_n_steps=1)
+    # gpu가 없으면 accelerator='cpu', 있으면 accelerator='gpu'
+    trainer = pl.Trainer(accelerator='gpu', max_epochs=args.max_epoch, log_every_n_steps=1)
 
     # Inference part
     # 저장된 모델로 예측을 진행합니다.
-    #model = torch.load('model.pt')
-
     checkpoint_pattern = f"./checkpoints/sts-*.ckpt"
     checkpoint_files = glob.glob(checkpoint_pattern)[0]
     model = Model.load_from_checkpoint(checkpoint_files)
-
     predictions = trainer.predict(model=model, datamodule=dataloader)
 
     # 예측된 결과를 형식에 맞게 반올림하여 준비합니다.
     predictions = list(round(float(i), 1) for i in torch.cat(predictions))
 
     # output 형식을 불러와서 예측된 결과로 바꿔주고, output.csv로 출력합니다.
-    output = pd.read_csv('./data/sample_submission.csv')
+    output = pd.read_csv('./output/sample_submission.csv')
     output['target'] = predictions
     outputname = 'output_' + checkpoint_files.replace('./checkpoints/', '') + '.csv'
     output.to_csv(outputname, index=False)

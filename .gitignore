@@ -1,0 +1,14 @@
+# data
+/data
+
+# model
+/model
+
+# log
+/lightning_logs
+
+# output
+/output
+
+# wandb
+/wandb

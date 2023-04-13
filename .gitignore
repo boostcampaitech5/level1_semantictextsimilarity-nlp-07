@@ -1,11 +1,11 @@
 # data
-/data/*.csv
+/data
 
 # model
-model.pt
+/model
 
 # log
 /lightning_logs
 
 # output
-output.csv
+/output

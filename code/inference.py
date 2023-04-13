@@ -197,6 +197,6 @@ if __name__ == '__main__':
     predictions = list(round(float(i), 1) for i in torch.cat(predictions))
 
     # output 형식을 불러와서 예측된 결과로 바꿔주고, output.csv로 출력합니다.
-    output = pd.read_csv('./submission/sample_submission.csv')
+    output = pd.read_csv('./output/sample_submission.csv')
     output['target'] = predictions
-    output.to_csv('output.csv', index=False)
+    output.to_csv('./output/output.csv', index=False)

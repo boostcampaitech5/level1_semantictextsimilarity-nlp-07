@@ -252,7 +252,7 @@ if __name__ == '__main__':
         'project': args.model_name.replace('/','_')
     }
 
-    wandb.login(key='6647e7f61a07d44fc1c727d6dc54f391aa44f527')
+    wandb.login(key='your_key')
 
     def sweep_train(config=None):
         wandb.init(config=config)

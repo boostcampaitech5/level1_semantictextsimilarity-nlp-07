@@ -8,6 +8,10 @@ model.pt
 /lightning_logs
 
 # output
+/output/*.csv
 output.csv
+
+# checkpoint
+/checkpoints
 
 # refer Jiho-Hong

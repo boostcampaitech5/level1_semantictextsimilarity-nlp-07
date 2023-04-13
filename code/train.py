@@ -8,7 +8,8 @@ import transformers
 import torch
 import torchmetrics
 import pytorch_lightning as pl
-
+from pytorch_lightning.callbacks import ModelCheckpoint
+import glob
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, inputs, targets=[]):
@@ -144,6 +145,7 @@ class Model(pl.LightningModule):
         loss = self.loss_func(logits, y.float())
         self.log("val_loss", loss)
 
+        val_pearson = torchmetrics.functional.pearson_corrcoef(logits.squeeze(), y.squeeze())
         self.log("val_pearson", torchmetrics.functional.pearson_corrcoef(logits.squeeze(), y.squeeze()))
 
         return loss
@@ -171,7 +173,7 @@ if __name__ == '__main__':
     # 실행 시 '--batch_size=64' 같은 인자를 입력하지 않으면 default 값이 기본으로 실행됩니다
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_name', default='klue/roberta-small', type=str)
-    parser.add_argument('--checkpoint', default=None)
+    parser.add_argument('--checkpoint', default=True)
     parser.add_argument('--batch_size', default=16, type=int)
     parser.add_argument('--max_epoch', default=1, type=int)
     parser.add_argument('--shuffle', default=True)
@@ -187,11 +189,25 @@ if __name__ == '__main__':
                             args.test_path, args.predict_path)
     model = Model(args.model_name, args.learning_rate)
     
-    if args.checkpoint != None:
-        model = torch.load(args.checkpoint)
+    if args.checkpoint:
+        checkpoint_pattern = f"./checkpoints/*.ckpt"
+        checkpoint_files = glob.glob(checkpoint_pattern)
+        
+    checkpoint_callback = ModelCheckpoint(
+        dirpath='checkpoints',
+        filename=f'{args.model_name}-' + 'sts-{epoch}-{val_pearson:.2f}',
+        save_top_k=1,
+        verbose=True,
+        monitor='val_pearson',
+        mode='max'
+    )
 
-    # gpu가 없으면 'gpus=0'을, gpu가 여러개면 'gpus=4'처럼 사용하실 gpu의 개수를 입력해주세요
-    trainer = pl.Trainer(gpus=1, max_epochs=args.max_epoch, log_every_n_steps=1)
+    if not checkpoint_files:
+        model = Model(args.model_name, args.learning_rate)
+        trainer = pl.Trainer(gpus=1, max_epochs=args.max_epoch, log_every_n_steps=1, callbacks=[checkpoint_callback])
+    else:
+        # gpu가 없으면 'gpus=0'을, gpu가 여러개면 'gpus=4'처럼 사용하실 gpu의 개수를 입력해주세요
+        trainer = pl.Trainer(gpus=1, max_epochs=args.max_epoch, resume_from_checkpoint=checkpoint_files[0], log_every_n_steps=1, callbacks=[checkpoint_callback])
 
     # Train part
     trainer.fit(model=model, datamodule=dataloader)

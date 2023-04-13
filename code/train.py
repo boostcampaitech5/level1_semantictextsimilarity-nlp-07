@@ -194,7 +194,7 @@ if __name__ == '__main__':
     parser.add_argument('--max_epoch', default=5, type=int)
     parser.add_argument('--shuffle', default=True)
     parser.add_argument('--learning_rate', default=1e-5, type=float)
-    parser.add_argument('--data_path', default='./data/')
+    parser.add_argument('--data_path', default='./data/', type=str)
     parser.add_argument('--train_path', default='./data/train.csv')
     parser.add_argument('--dev_path', default='./data/dev.csv')
     parser.add_argument('--test_path', default='./data/dev.csv')
@@ -212,6 +212,11 @@ if __name__ == '__main__':
     print(args.learning_rate)
     print(args.loss)
     
+    train_path = args.data_path + 'train.csv'
+    dev_path = args.data_path + 'dev.csv'
+    test_path = args.data_path + 'dev.csv'
+    predict_path = args.data_path + 'test.csv'
+        
     if args.random_seed:
         global_seed = 777
         print("="*50,"\nNOTICE: Fixing random seed to", global_seed, "\n" + "="*50, "\n")
@@ -241,7 +246,7 @@ if __name__ == '__main__':
     #                         args.test_path, args.predict_path)
     # model = Model(args.model_name, args.learning_rate)
 
-    wandb.login(key='your_key')
+    wandb.login(key='6647e7f61a07d44fc1c727d6dc54f391aa44f527')
     model_name = args.model_name
     wandb_logger = WandbLogger(
         log_model="all",
@@ -249,8 +254,8 @@ if __name__ == '__main__':
         project=args.wandb_project+'_'+args.loss, 
         entity=args.wandb_entity
     )
-    dataloader = Dataloader(args.model_name, args.batch_size, args.shuffle, args.train_path, args.dev_path, 
-                                    args.test_path, args.predict_path)
+    dataloader = Dataloader(args.model_name, args.batch_size, args.shuffle, train_path, dev_path, 
+                                    test_path, predict_path)
     vocab_size = len(dataloader.tokenizer)
     print("LL", vocab_size)
     model = Model(args.model_name, args.learning_rate, vocab_size, args.loss)

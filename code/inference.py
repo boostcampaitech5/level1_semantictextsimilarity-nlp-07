@@ -177,15 +177,17 @@ if __name__ == '__main__':
     parser.add_argument('--max_epoch', default=1, type=int)
     parser.add_argument('--shuffle', default=True)
     parser.add_argument('--learning_rate', default=1e-5, type=float)
-    parser.add_argument('--train_path', default='./data/train.csv')
-    parser.add_argument('--dev_path', default='./data/dev.csv')
-    parser.add_argument('--test_path', default='./data/test.csv')
-    parser.add_argument('--predict_path', default='./data/test.csv')
+    parser.add_argument('--data_path', default='./data/', type=str)
     args = parser.parse_args()
 
+    train_path = args.data_path + 'train.csv'
+    dev_path = args.data_path + 'dev.csv'
+    test_path = args.data_path + 'test.csv'
+    predict_path = args.data_path + 'test.csv'
+
     # dataloader와 model을 생성합니다.
-    dataloader = Dataloader(args.model_name, args.batch_size, args.shuffle, args.train_path, args.dev_path,
-                            args.test_path, args.predict_path)
+    dataloader = Dataloader(args.model_name, args.batch_size, args.shuffle, train_path, dev_path,
+                            test_path, predict_path)
 
     # gpu가 없으면 'gpus=0'을, gpu가 여러개면 'gpus=4'처럼 사용하실 gpu의 개수를 입력해주세요
     trainer = pl.Trainer(accelerator='gpu', max_epochs=args.max_epoch, log_every_n_steps=1)
@@ -201,4 +203,4 @@ if __name__ == '__main__':
     # output 형식을 불러와서 예측된 결과로 바꿔주고, output.csv로 출력합니다.
     output = pd.read_csv('./output/sample_submission.csv')
     output['target'] = predictions
-    output.to_csv('output.csv', index=False)
+    output.to_csv('./output/output.csv', index=False)

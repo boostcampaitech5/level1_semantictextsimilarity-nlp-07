@@ -60,7 +60,7 @@ class Dataloader(pl.LightningDataModule):
         self.target_columns = ['label']
         self.delete_columns = ['id']
         self.text_columns = ['sentence_1', 'sentence_2']
-        self.tokenizer.add_tokens(['<PERSON>'])
+        self.tokenizer.add_special_tokens({'additional_special_tokens' : ['<PERSON>']})
 
     def tokenizing(self, dataframe):
         data = []
@@ -124,7 +124,7 @@ class Dataloader(pl.LightningDataModule):
 
 
 class Model(pl.LightningModule):
-    def __init__(self, model_name, lr, loss="L1"):
+    def __init__(self, model_name, lr, vocab_size, loss="L1"):
         super().__init__()
         self.save_hyperparameters()
 
@@ -134,6 +134,7 @@ class Model(pl.LightningModule):
         # 사용할 모델을 호출합니다.
         self.plm = transformers.AutoModelForSequenceClassification.from_pretrained(
             pretrained_model_name_or_path=model_name, num_labels=1)
+        self.plm.resize_token_embeddings(vocab_size)
         # Loss 계산을 위해 사용될 L1Loss를 호출합니다.
         # L1 loss가 아닌 MSE loss (=L2 loss)도 사용해봅시다. 
         if loss == "MSE":
@@ -202,7 +203,7 @@ if __name__ == '__main__':
     parser.add_argument('--wandb_username', default='hsp9308')
     parser.add_argument('--wandb_project', default='model-comparing')
     parser.add_argument('--wandb_entity', default='hsp9308')
-    parser.add_argument('--random', default=False, type=bool)
+    parser.add_argument('--random_seed', default=False, type=bool)
        
     date = datetime.datetime.now().strftime('%Y-%m-%d')
     args = parser.parse_args()
@@ -211,7 +212,7 @@ if __name__ == '__main__':
     print(args.learning_rate)
     print(args.loss)
     
-    if args.random:
+    if args.random_seed:
         global_seed = 777
         print("="*50,"\nNOTICE: Fixing random seed to", global_seed, "\n" + "="*50, "\n")
         torch.manual_seed(global_seed)
@@ -240,7 +241,7 @@ if __name__ == '__main__':
     #                         args.test_path, args.predict_path)
     # model = Model(args.model_name, args.learning_rate)
 
-    wandb.login(key='6647e7f61a07d44fc1c727d6dc54f391aa44f527')
+    wandb.login(key='your_key')
     model_name = args.model_name
     wandb_logger = WandbLogger(
         log_model="all",
@@ -248,10 +249,12 @@ if __name__ == '__main__':
         project=args.wandb_project+'_'+args.loss, 
         entity=args.wandb_entity
     )
-
-    model = Model(args.model_name, args.learning_rate, args.loss)
     dataloader = Dataloader(args.model_name, args.batch_size, args.shuffle, args.train_path, args.dev_path, 
                                     args.test_path, args.predict_path)
+    vocab_size = len(dataloader.tokenizer)
+    print("LL", vocab_size)
+    model = Model(args.model_name, args.learning_rate, vocab_size, args.loss)
+
 
     # # gpu가 없으면 accelerator='cpu', 있으면 accelerator='gpu'
     trainer = pl.Trainer(accelerator='gpu', max_epochs=args.max_epoch, log_every_n_steps=1,
@@ -264,4 +267,4 @@ if __name__ == '__main__':
     trainer.test(model=model, datamodule=dataloader)
 
     # 학습이 완료된 모델을 저장합니다.
-    torch.save(model, args.model_name.replace("/","-")+'_'+args.loss+'_base.pt')
+    torch.save(model, "./model/" + args.model_name.replace("/","-")+'_'+args.loss+'_base.pt')

@@ -175,11 +175,11 @@ if __name__ == '__main__':
     parser.add_argument('--max_epoch', default=1, type=int)
     parser.add_argument('--shuffle', default=True)
     parser.add_argument('--learning_rate', default=1e-5, type=float)
-    parser.add_argument('--train_path', default='train.csv')
-    parser.add_argument('--dev_path', default='dev.csv')
-    parser.add_argument('--test_path', default='dev.csv')
-    parser.add_argument('--predict_path', default='test.csv')
-    args = parser.parse_args(args=[])
+    parser.add_argument('--train_path', default='./data/train.csv')
+    parser.add_argument('--dev_path', default='./data/dev.csv')
+    parser.add_argument('--test_path', default='./data/dev.csv')
+    parser.add_argument('--predict_path', default='./data/test.csv')
+    args = parser.parse_args()
 
     # dataloader와 model을 생성합니다.
     dataloader = Dataloader(args.model_name, args.batch_size, args.shuffle, args.train_path, args.dev_path,

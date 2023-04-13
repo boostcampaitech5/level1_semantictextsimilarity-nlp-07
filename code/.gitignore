@@ -1,0 +1,13 @@
+# data
+/data/*.csv
+
+# model
+model.pt
+
+# log
+/lightning_logs
+
+# output
+output.csv
+
+# refer Jiho-Hong

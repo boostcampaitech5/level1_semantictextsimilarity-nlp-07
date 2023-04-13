@@ -200,9 +200,9 @@ if __name__ == '__main__':
     parser.add_argument('--test_path', default='./data/dev.csv')
     parser.add_argument('--predict_path', default='./data/test.csv')
     parser.add_argument('--loss', default='L1', type=str)
-    parser.add_argument('--wandb_username', default='hsp9308')
+    parser.add_argument('--wandb_username', default='username')
     parser.add_argument('--wandb_project', default='model-comparing')
-    parser.add_argument('--wandb_entity', default='hsp9308')
+    parser.add_argument('--wandb_entity', default='username')
     parser.add_argument('--random_seed', default=False, type=bool)
        
     date = datetime.datetime.now().strftime('%Y-%m-%d')

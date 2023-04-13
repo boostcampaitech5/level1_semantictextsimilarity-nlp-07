@@ -49,6 +49,8 @@ class Dataloader(pl.LightningDataModule):
         self.target_columns = ['label']
         self.delete_columns = ['id']
         self.text_columns = ['sentence_1', 'sentence_2']
+        
+        self.tokenizer.add_special_tokens({'additional_special_tokens': ['<PERSON>']})
 
     def tokenizing(self, dataframe):
         data = []
@@ -190,7 +192,7 @@ if __name__ == '__main__':
 
     # Inference part
     # 저장된 모델로 예측을 진행합니다.
-    model = torch.load(args.model_name.replace('/','-')+'_base.pt')
+    model = torch.load("./model/"+args.model_name.replace('/','-')+"_"+args.loss+'_base.pt')
     predictions = trainer.predict(model=model, datamodule=dataloader)
 
     # 예측된 결과를 형식에 맞게 반올림하여 준비합니다.

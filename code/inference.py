@@ -189,7 +189,7 @@ if __name__ == '__main__':
     dataloader = Dataloader(args.model_name, args.batch_size, args.shuffle, train_path, dev_path,
                             test_path, predict_path)
 
-    # gpu가 없으면 'gpus=0'을, gpu가 여러개면 'gpus=4'처럼 사용하실 gpu의 개수를 입력해주세요
+    # gpu가 없으면 accelerator='cpu', 있으면 accelerator='gpu'
     trainer = pl.Trainer(accelerator='gpu', max_epochs=args.max_epoch, log_every_n_steps=1)
 
     # Inference part

@@ -1,8 +1,8 @@
 # data
-/data*
+/data
 
 # model
-/model*
+/model
 
 # log
 /lightning_logs
@@ -11,4 +11,4 @@
 /output
 
 # wandb
-wandb
+/wandb

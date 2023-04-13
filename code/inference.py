@@ -190,7 +190,7 @@ if __name__ == '__main__':
 
     # Inference part
     # 저장된 모델로 예측을 진행합니다.
-    model = torch.load('model.pt')
+    model = torch.load('./model/model.pt')
     predictions = trainer.predict(model=model, datamodule=dataloader)
 
     # 예측된 결과를 형식에 맞게 반올림하여 준비합니다.

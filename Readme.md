@@ -1,6 +1,8 @@
 # Semantic Text Similarity
 
 ## Directory
+checkpoints
+└── checkpoint_name.ckpt
 code   
 ├── inference.py   
 └── train.py   

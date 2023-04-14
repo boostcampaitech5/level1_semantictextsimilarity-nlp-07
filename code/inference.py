@@ -1,5 +1,5 @@
 import argparse
-
+import os
 import pandas as pd
 
 from tqdm.auto import tqdm
@@ -178,6 +178,8 @@ if __name__ == '__main__':
     parser.add_argument('--model_name', default='klue/roberta-small', type=str)
 
     parser.add_argument('--batch_size', default=16, type=int)
+    parser.add_argument('--checkpoint_name', default=None, type=str)
+    parser.add_argument('--checkpoint_new_or_best', default='new', help="input new or best")
     parser.add_argument('--max_epoch', default=1, type=int)
     parser.add_argument('--learning_rate', default=1e-5, type=float)
     parser.add_argument('--loss', default='L1', type=str)
@@ -203,9 +205,13 @@ if __name__ == '__main__':
     checkpoint_pattern = f"../checkpoints/*.ckpt"
     checkpoint_files = glob.glob(checkpoint_pattern)
     # Sort the list of checkpoint files by val_pearson in descending order
-    checkpoint_files = sorted(checkpoint_files, key=extract_val_pearson, reverse=True)
+    if args.new_or_best.lower() == "best":
+        checkpoint_files = sorted(checkpoint_files, key=extract_val_pearson, reverse=True)
+    else:
+        checkpoint_files = sorted(checkpoint_files, key=os.path.getmtime, reverse=True)
     checkpoint_file = checkpoint_files[0]
     print(checkpoint_file)
+
     model = Model.load_from_checkpoint(checkpoint_file)
     predictions = trainer.predict(model=model, datamodule=dataloader)
 

@@ -24,7 +24,11 @@ from utils import set_model_name
 from utils import set_hyperparameter_config
 from utils import set_checkpoint_config
 from utils import set_wandb_config
+from utils import working_directory_match
 import glob
+
+
+working_directory_match('code')
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, inputs, targets=[]):
@@ -196,8 +200,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_name', default='klue/roberta-small', type=str)
     parser.add_argument('--batch_size', default=16, type=int)
-    parser.add_argument('--checkpoint', default="True", type=str, help="True/False")
-    parser.add_argument('--new_or_best', default='new', help="new/best")
+
+    parser.add_argument('--checkpoint_use', default="True", type=str, help="True/False")
+    parser.add_argument('--checkpoint_name', default=None, type=str)
+    parser.add_argument('--checkpoint_new_or_best', default='new', help="input new or best")
+
     parser.add_argument('--max_epoch', default=5, type=int)
     parser.add_argument('--shuffle', default=True)
     parser.add_argument('--learning_rate', default=1e-5, type=float)
@@ -274,22 +281,25 @@ if __name__ == '__main__':
     print("LL", vocab_size)
 
     checkpoint_file = False
-    if checkpoint_config["checkpoint"]=="True":
-        checkpoint_pattern = f"../checkpoints/*.ckpt"
-        checkpoint_files = glob.glob(checkpoint_pattern)
-        # Sort the list of checkpoint files by val_pearson in descending order
-        if checkpoint_config["new_or_best"].lower() == "best":
-            checkpoint_files = sorted(checkpoint_files, key=extract_val_pearson, reverse=True)
+    if checkpoint_config["checkpoint_use"]=="True":
+        if checkpoint_config["checkpoint_name"] != None:
+            checkpoint_file = "../checkpoints/" + checkpoint_config['checkpoint_name']
         else:
-            checkpoint_files = sorted(checkpoint_files, key=os.path.getctime, reverse=True)
-    
+            checkpoint_pattern = f"../checkpoints/*.ckpt"
+            checkpoint_files = glob.glob(checkpoint_pattern)
+            # Sort the list of checkpoint files by val_pearson in descending order
+            if checkpoint_config["checkpoint_new_or_best"].lower() == "best":
+                checkpoint_files = sorted(checkpoint_files, key=extract_val_pearson, reverse=True)
+            else:
+                checkpoint_files = sorted(checkpoint_files, key=os.path.getctime, reverse=True)
+            checkpoint_file = checkpoint_files[0]
+
     if not checkpoint_file:
         model = Model(args.model_name, args.learning_rate, vocab_size, args.loss)
         trainer = pl.Trainer(gpus=1, max_epochs=hyperparameter_config["max_epoch"], log_every_n_steps=1, 
                              callbacks=[checkpoint_callback, early_stop_callback], 
                              logger=wandb_logger)
     else:
-        checkpoint_file = checkpoint_files[0]
         # gpu가 없으면 'gpus=0'을, gpu가 여러개면 'gpus=4'처럼 사용하실 gpu의 개수를 입력해주세요
         model = Model.load_from_checkpoint(checkpoint_file)
         trainer = pl.Trainer(gpus=1, max_epochs=hyperparameter_config["max_epoch"], resume_from_checkpoint=checkpoint_file, 

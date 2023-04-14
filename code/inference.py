@@ -179,7 +179,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--batch_size', default=16, type=int)
 
-    parser.add_argument('--checkpoint_name', default=None, type=str)
+    parser.add_argument('--checkpoint_name', default="", type=str)
     parser.add_argument('--checkpoint_new_or_best', default='new', help="input new or best")
 
     parser.add_argument('--max_epoch', default=1, type=int)
@@ -204,7 +204,7 @@ if __name__ == '__main__':
 
     # Inference part
     # 저장된 모델로 예측을 진행합니다.
-    if args.checkpoint_name != None:
+    if args.checkpoint_name != "":
             checkpoint_file = "./checkpoints/" + args.checkpoint_name
     else:
         checkpoint_pattern = f"./checkpoints/*.ckpt"

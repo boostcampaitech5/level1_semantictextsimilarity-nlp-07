@@ -9,7 +9,7 @@
 /code/lightning_logs
 
 # checkpoints
-/checkpoints/*.ckpt
+/checkpoints
 
 # output
 /output

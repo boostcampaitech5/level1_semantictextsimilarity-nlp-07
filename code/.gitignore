@@ -1,20 +1,17 @@
 # data
-/data/*.csv
+/data
 
 # model
-model.pt
+/model
 
 # log
 /lightning_logs
 
-# output
-/output/*.csv
-output.csv
-
-# checkpoint
+# checkpoints
 /checkpoints
+
+# output
+/output
 
 # wandb
 /wandb
-
-# refer Jiho-Hong

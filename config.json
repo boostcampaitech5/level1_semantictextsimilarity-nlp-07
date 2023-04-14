@@ -2,14 +2,15 @@
     "model": "klue/roberta-small",
     "hyperparameter": {
         "batch_size": 16,
-        "max_epoch": 1,
+        "max_epoch": 21,
         "learning_rate": 1e-5,
         "loss": "L1",
         "shuffle": true
     },
     "checkpoint": {
-        "checkpoint": "True",
-        "new_or_best": "new"
+        "checkpoint_use": "True",
+        "checkpoint_name": "klue-roberta-small-sts-epoch=0-val_pearson=0.76.ckpt",
+        "checkpoint_new_or_best": "best"
     },
     "wandb": {
         "username": "leedongho9798",

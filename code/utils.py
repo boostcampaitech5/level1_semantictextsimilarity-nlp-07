@@ -1,4 +1,5 @@
 import json
+import os
 from collections import defaultdict
 
 def set_model_name(args):
@@ -50,11 +51,13 @@ def set_checkpoint_config(args):
     if args.config:
         with open(args.config) as json_data:
             data = json.load(json_data)
-        checkpoint_config["checkpoint"] = data["checkpoint"]["checkpoint"]
-        checkpoint_config["new_or_best"] = data["checkpoint"]["new_or_best"]
+        checkpoint_config["checkpoint_use"] = data["checkpoint"]["checkpoint_use"]
+        checkpoint_config["checkpoint_new_or_best"] = data["checkpoint"]["checkpoint_new_or_best"]
+        checkpoint_config["checkpoint_name"] = data["checkpoint"]["checkpoint_name"]
     else:
-        checkpoint_config["checkpoint"] = args.checkpoint
-        checkpoint_config["new_or_best"] = args.new_or_best
+        checkpoint_config["checkpoint_checkpoint"] = args.checkpoint_use
+        checkpoint_config["checkpoint_new_or_best"] = args.checkpoint_new_or_best
+        checkpoint_config["checkpoint_name"] = args.checkpoint_name
     
     return checkpoint_config
 
@@ -62,3 +65,8 @@ def extract_val_pearson(file_name):
     # Extract the val_pearson value from the file name
     val_pearson = float(file_name.split("val_pearson=")[1].split(".ckpt")[0])
     return val_pearson
+
+def working_directory_match(word):
+    current_working_directory = os.getcwd()
+    if word not in current_working_directory:
+      os.chdir('./' + word)

@@ -5,6 +5,7 @@ import os
 import pandas as pd
 
 from tqdm.auto import tqdm
+from collections import Counter
 
 import transformers
 import torch
@@ -14,6 +15,8 @@ import pytorch_lightning as pl
 import wandb
 import numpy as np
 import random
+
+from torch.utils.data.sampler import Sampler
 
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
@@ -25,6 +28,46 @@ from utils import set_hyperparameter_config
 from utils import set_checkpoint_config
 from utils import set_wandb_config
 import glob
+
+class OverSampler(Sampler):
+    """Over Sampling
+    Provides equal representation of target classes in each batch
+    """
+    def __init__(self, targets):
+        """
+        Arguments
+        ---------
+        class_vector : torch tensor
+            a vector of class labels
+        batch_size : integer
+            batch_size
+        """
+        self.targets = targets
+        self.num_samples = len(targets)
+        self.indices = list(range(len(targets)))
+        target_list = targets
+        target_bin = np.floor(np.array(targets) * 2.0) / 2.0
+        bin_count = Counter(target_bin.reshape(-1))
+        bin_count[4.5] += bin_count[5.0]
+        bin_count[5.0] = bin_count[4.5]
+        weights = [1.0 / bin_count[np.floor(2.0*label[0])/2.0] for label in targets]
+
+        self.weights = torch.DoubleTensor(weights)
+
+    def __iter__(self):
+        count = 0
+        index = [self.indices[i] for i in torch.multinomial(
+            self.weights, self.num_samples, replacement=True
+        )]
+        while count < self.num_samples:
+            yield index[count] 
+            count += 1
+            
+        # return (self.indices[i] for i in torch.multinomial(
+        #     self.weights, self.batch_size, replacement=True))
+
+    def __len__(self):
+        return self.num_samples
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, inputs, targets=[]):
@@ -45,7 +88,7 @@ class Dataset(torch.utils.data.Dataset):
 
 
 class Dataloader(pl.LightningDataModule):
-    def __init__(self, model_name, batch_size, shuffle, train_path, dev_path, test_path, predict_path):
+    def __init__(self, model_name, batch_size, shuffle, train_path, dev_path, test_path, predict_path, oversampling=False):
         super().__init__()
         self.model_name = model_name
         self.batch_size = batch_size
@@ -60,6 +103,10 @@ class Dataloader(pl.LightningDataModule):
         self.val_dataset = None
         self.test_dataset = None
         self.predict_dataset = None
+        
+        self.oversampling = oversampling
+        if oversampling:
+            print("NOTICE: Oversampling activated")
 
         self.tokenizer = transformers.AutoTokenizer.from_pretrained(model_name, max_length=160)
         self.target_columns = ['label']
@@ -116,7 +163,13 @@ class Dataloader(pl.LightningDataModule):
             self.predict_dataset = Dataset(predict_inputs, [])
 
     def train_dataloader(self):
-        return torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=self.shuffle)
+        if self.oversampling:
+            sampler = OverSampler(self.train_dataset.targets)
+            return torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, 
+                                               sampler=sampler, 
+                                               drop_last=False)
+        else:
+            return torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=self.shuffle)
 
     def val_dataloader(self):
         return torch.utils.data.DataLoader(self.val_dataset, batch_size=self.batch_size)
@@ -205,6 +258,7 @@ if __name__ == '__main__':
     parser.add_argument('--learning_rate', default=1e-5, type=float)
     parser.add_argument('--loss', default='L1', type=str)
     parser.add_argument('--shuffle', default=True)
+    parser.add_argument('--oversampling', default=True, type=bool)
 
     parser.add_argument('--data_path', default='./data/', type=str)
     parser.add_argument('--train_path', default='./data/train.csv')
@@ -273,7 +327,7 @@ if __name__ == '__main__':
         entity=wandb_config["entity"]
     )
     dataloader = Dataloader(model_name, hyperparameter_config["batch_size"], hyperparameter_config["shuffle"], train_path, dev_path, 
-                                    test_path, predict_path)
+                                    test_path, predict_path, oversampling=hyperparameter_config["oversampling"])
     vocab_size = len(dataloader.tokenizer)
     print("LL", vocab_size)
 

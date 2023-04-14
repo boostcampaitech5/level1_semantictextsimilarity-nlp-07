@@ -231,6 +231,17 @@ def set_wandb_config(args):
     
     return wandb_config
 
+def set_checkpoint_config(args):
+    checkpoint_config = defaultdict()
+    if args.config:
+        with open(args.config) as json_data:
+            data = json.load(json_data)
+        checkpoint_config["checkpoint"] = data["checkpoint"]["checkpoint"]
+        checkpoint_config["new_or_best"] = data["checkpoint"]["new_or_best"]
+    else:
+        checkpoint_config["checkpoint"] = args.checkpoint
+        checkpoint_config["new_or_best"] = args.new_or_best
+
 if __name__ == '__main__':    
     # 하이퍼 파라미터 등 각종 설정값을 입력받습니다
     # 터미널 실행 예시 : python3 run.py --batch_size=64 ...
@@ -238,27 +249,25 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_name', default='klue/roberta-small', type=str)
     parser.add_argument('--batch_size', default=16, type=int)
-    parser.add_argument('--checkpoint', default="True", type=str)
-    parser.add_argument('--new_or_best', default='new')
+    parser.add_argument('--checkpoint', default="True", type=str, help="True/False")
+    parser.add_argument('--new_or_best', default='new', help="new/best")
     parser.add_argument('--max_epoch', default=5, type=int)
     parser.add_argument('--shuffle', default=True)
     parser.add_argument('--learning_rate', default=1e-5, type=float)
     parser.add_argument('--loss', default='L1', type=str)
-    parser.add_argument('--shuffle', default=True)
 
     parser.add_argument('--data_path', default='./data/', type=str)
     parser.add_argument('--train_path', default='./data/train.csv')
     parser.add_argument('--dev_path', default='./data/dev.csv')
     parser.add_argument('--test_path', default='./data/dev.csv')
     parser.add_argument('--predict_path', default='./data/test.csv')
-    parser.add_argument('--random_seed', default=False, type=bool)
 
-    parser.add_argument('--wandb_username', default='leedongho9798')
-    parser.add_argument('--wandb_entity', default='leedongho9798')
+    parser.add_argument('--wandb_username', default='username')
+    parser.add_argument('--wandb_entity', default='username')
     parser.add_argument('--random_seed', default=False, type=bool)
-    parser.add_argument('--wandb_key', default='a150cd5b7d387493ae18a4694a81a6dd933ba72b')
+    parser.add_argument('--wandb_key', default='key')
     parser.add_argument('--wandb_project', default='STS')
-    parser.add_argument('--config', default=False, type=str, help='config file')
+    parser.add_argument('--config', default="../config.json", type=str, help='config file')
        
     date = datetime.datetime.now().strftime('%Y-%m-%d')
     args = parser.parse_args()
@@ -277,24 +286,27 @@ if __name__ == '__main__':
         torch.backends.cudnn.benchmark = False
         np.random.seed(global_seed)
         random.seed(global_seed)
+    
     model_name = set_model_name(args)
     hyperparameter_config = set_hyperparameter_config(args)
     wandb_config = set_wandb_config(args)
 
     # 2023-04-10: 모델에 대한 Callback을 추가합니다.
     # Pytorch Lightning에서 지원하는 Model Checkpoint 저장 및 EarlyStopping을 추가해줍니다.
-    cp_callback = ModelCheckpoint(monitor='val_pearson',    # Pearson coefficient를 기준으로 저장
-                                  verbose=False,            # 중간 출력문을 출력할지 여부. False 시, 없음.
-                                  save_last=True,           # last.ckpt 로 저장됨
-                                  save_top_k=1,             # k개의 최고 성능 체크 포인트를 저장하겠다.
-                                  save_weights_only=True,   # Weight만 저장할지, 학습 관련 정보도 저장할지 여부.
-                                  mode='max'                # 'max' : monitor metric이 증가하면 저장.
-                                  )
+    checkpoint_callback = ModelCheckpoint(
+        dirpath='checkpoints',
+        filename=f'{args.model_name.replace("/","-")}-' + 'sts-{epoch}-{val_pearson:.2f}',
+        save_top_k=1,
+        verbose=True,
+        monitor='val_pearson',
+        mode='max'
+    )
+
     early_stop_callback = EarlyStopping(monitor='val_pearson', 
-                                        patience=2,         # 2번 이상 validation 성능이 안좋아지면 early stop
+                                        patience=5,         # 2번 이상 validation 성능이 안좋아지면 early stop
                                         mode='max'          # 'max' : monitor metric은 최대화되어야 함.
                                         )
-
+    
     # dataloader와 model을 생성합니다.
     # dataloader = Dataloader(args.model_name, args.batch_size, args.shuffle, args.train_path, args.dev_path,
     #                         args.test_path, args.predict_path)
@@ -323,20 +335,6 @@ if __name__ == '__main__':
         else:
             checkpoint_files = sorted(checkpoint_files, key=os.path.getctime, reverse=True)
         checkpoint_file = checkpoint_files[0]
-
-    checkpoint_callback = ModelCheckpoint(
-        dirpath='checkpoints',
-        filename=f'{args.model_name.replace("/","-")}-' + 'sts-{epoch}-{val_pearson:.2f}',
-        save_top_k=1,
-        verbose=True,
-        monitor='val_pearson',
-        mode='max'
-    )
-
-    early_stop_callback = EarlyStopping(monitor='val_pearson', 
-                                        patience=5,         # 2번 이상 validation 성능이 안좋아지면 early stop
-                                        mode='max'          # 'max' : monitor metric은 최대화되어야 함.
-                                        )
     
     if not checkpoint_file:
         model = Model(args.model_name, args.learning_rate, vocab_size, args.loss)

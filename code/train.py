@@ -185,6 +185,33 @@ class Model(pl.LightningModule):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr)
         return optimizer
 
+def set_model_name(args):
+    if args.config:
+        with open(args.config) as json_data:
+            data = json.load(json_data)
+        return data["model"]
+    else:
+        return args.model_name
+
+def set_hyperparameter_config(args):
+    hyperparameter_config = defaultdict()
+    if args.config:
+        with open(args.config) as json_data:
+            data = json.load(json_data)
+        hyperparameter_config["batch_size"] = data["hyperparameter"]["batch_size"]
+        hyperparameter_config["max_epoch"] = data["hyperparameter"]["max_epoch"]
+        hyperparameter_config["learning_rate"] = data["hyperparameter"]["learning_rate"]
+        hyperparameter_config["loss"] = data["hyperparameter"]["loss"]
+        hyperparameter_config["shuffle"] = data["hyperparameter"]["shuffle"]
+    else:
+        hyperparameter_config["batch_size"] = args.batch_size
+        hyperparameter_config["max_epoch"] = args.max_epoch
+        hyperparameter_config["learning_rate"] = args.loss
+        hyperparameter_config["loss"] = args.wandb_project
+        hyperparameter_config["shuffle"] = args.shuffle
+    
+    return hyperparameter_config
+
 def set_wandb_config(args):
     wandb_config = defaultdict()
     if args.config:
@@ -208,16 +235,18 @@ if __name__ == '__main__':
     # 실행 시 '--batch_size=64' 같은 인자를 입력하지 않으면 default 값이 기본으로 실행됩니다
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_name', default='klue/roberta-small', type=str)
+
     parser.add_argument('--batch_size', default=16, type=int)
     parser.add_argument('--max_epoch', default=5, type=int)
-    parser.add_argument('--shuffle', default=True)
     parser.add_argument('--learning_rate', default=1e-5, type=float)
+    parser.add_argument('--loss', default='L1', type=str)
+    parser.add_argument('--shuffle', default=True)
+
     parser.add_argument('--data_path', default='./data/', type=str)
     parser.add_argument('--train_path', default='./data/train.csv')
     parser.add_argument('--dev_path', default='./data/dev.csv')
     parser.add_argument('--test_path', default='./data/dev.csv')
     parser.add_argument('--predict_path', default='./data/test.csv')
-    parser.add_argument('--loss', default='L1', type=str)
     parser.add_argument('--random_seed', default=False, type=bool)
 
     parser.add_argument('--wandb_username', default='username')
@@ -228,10 +257,6 @@ if __name__ == '__main__':
 
     date = datetime.datetime.now().strftime('%Y-%m-%d')
     args = parser.parse_args()
-    print(args.model_name)
-    print(args.batch_size)
-    print(args.learning_rate)
-    print(args.loss)
     
     train_path = args.data_path + 'train.csv'
     dev_path = args.data_path + 'dev.csv'
@@ -248,6 +273,8 @@ if __name__ == '__main__':
         np.random.seed(global_seed)
         random.seed(global_seed)
 
+    model_name = set_model_name(args)
+    hyperparameter_config = set_hyperparameter_config(args)
     wandb_config = set_wandb_config(args)
 
     # 2023-04-10: 모델에 대한 Callback을 추가합니다.
@@ -270,22 +297,22 @@ if __name__ == '__main__':
     # model = Model(args.model_name, args.learning_rate)
 
     wandb.login(key=wandb_config["key"])
-    model_name = args.model_name
+    model_name = model_name
     wandb_logger = WandbLogger(
         log_model="all",
-        name=f'{args.model_name.replace("/","-")}_{args.batch_size}_{args.learning_rate:.3e}_{args.loss}_{date}',
-        project=wandb_config["project"]+'_'+args.loss, 
+        name=f'{model_name.replace("/","-")}_{hyperparameter_config["batch_size"]}_{hyperparameter_config["learning_rate"]:.3e}_{hyperparameter_config["loss"]}_{date}',
+        project=wandb_config["project"]+'_'+hyperparameter_config["loss"], 
         entity=wandb_config["entity"]
     )
-    dataloader = Dataloader(args.model_name, args.batch_size, args.shuffle, train_path, dev_path, 
+    dataloader = Dataloader(model_name, hyperparameter_config["batch_size"], hyperparameter_config["shuffle"], train_path, dev_path, 
                                     test_path, predict_path)
     vocab_size = len(dataloader.tokenizer)
     print("LL", vocab_size)
-    model = Model(args.model_name, args.learning_rate, vocab_size, args.loss)
+    model = Model(model_name, hyperparameter_config["learning_rate"], vocab_size, hyperparameter_config["loss"])
 
 
     # # gpu가 없으면 accelerator='cpu', 있으면 accelerator='gpu'
-    trainer = pl.Trainer(accelerator='gpu', max_epochs=args.max_epoch, log_every_n_steps=1,
+    trainer = pl.Trainer(accelerator='gpu', max_epochs=hyperparameter_config["max_epoch"], log_every_n_steps=1,
                          callbacks=[cp_callback, early_stop_callback],  # 2023-04-10: callback 추가
                          logger=wandb_logger
                          )
@@ -295,4 +322,4 @@ if __name__ == '__main__':
     trainer.test(model=model, datamodule=dataloader)
 
     # 학습이 완료된 모델을 저장합니다.
-    torch.save(model, "./model/" + args.model_name.replace("/","-")+'_'+args.loss+'_base.pt')
+    torch.save(model, "./model/" + model_name.replace("/","-")+'_'+hyperparameter_config["loss"]+'_base.pt')

@@ -24,11 +24,7 @@ from utils import set_model_name
 from utils import set_hyperparameter_config
 from utils import set_checkpoint_config
 from utils import set_wandb_config
-from utils import working_directory_match
 import glob
-
-
-working_directory_match('code')
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, inputs, targets=[]):
@@ -199,37 +195,37 @@ if __name__ == '__main__':
     # 실행 시 '--batch_size=64' 같은 인자를 입력하지 않으면 default 값이 기본으로 실행됩니다
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_name', default='klue/roberta-small', type=str)
-    parser.add_argument('--batch_size', default=16, type=int)
 
     parser.add_argument('--checkpoint_use', default="True", type=str, help="True/False")
     parser.add_argument('--checkpoint_name', default=None, type=str)
     parser.add_argument('--checkpoint_new_or_best', default='new', help="input new or best")
 
+    parser.add_argument('--batch_size', default=16, type=int)
     parser.add_argument('--max_epoch', default=5, type=int)
-    parser.add_argument('--shuffle', default=True)
     parser.add_argument('--learning_rate', default=1e-5, type=float)
     parser.add_argument('--loss', default='L1', type=str)
+    parser.add_argument('--shuffle', default=True)
 
     parser.add_argument('--data_path', default='./data/', type=str)
     parser.add_argument('--train_path', default='./data/train.csv')
     parser.add_argument('--dev_path', default='./data/dev.csv')
     parser.add_argument('--test_path', default='./data/dev.csv')
     parser.add_argument('--predict_path', default='./data/test.csv')
+    parser.add_argument('--random_seed', default=False, type=bool)
 
     parser.add_argument('--wandb_username', default='username')
     parser.add_argument('--wandb_entity', default='username')
-    parser.add_argument('--random_seed', default=False, type=bool)
     parser.add_argument('--wandb_key', default='key')
     parser.add_argument('--wandb_project', default='STS')
-    parser.add_argument('--config', default="../config.json", type=str, help='config file')
-       
+    parser.add_argument('--config', default=False, type=str, help='config file')
+
     date = datetime.datetime.now().strftime('%Y-%m-%d')
     args = parser.parse_args()
     
-    train_path = '../data/train.csv'
-    dev_path = '../data/dev.csv'
-    test_path = '../data/dev.csv'
-    predict_path = '../data/test.csv'
+    train_path = args.data_path + 'train.csv'
+    dev_path = args.data_path + 'dev.csv'
+    test_path = args.data_path + 'dev.csv'
+    predict_path = args.data_path + 'test.csv'
         
     if args.random_seed:
         global_seed = 777
@@ -249,7 +245,7 @@ if __name__ == '__main__':
     # 2023-04-10: 모델에 대한 Callback을 추가합니다.
     # Pytorch Lightning에서 지원하는 Model Checkpoint 저장 및 EarlyStopping을 추가해줍니다.
     checkpoint_callback = ModelCheckpoint(
-        dirpath='../checkpoints',
+        dirpath='./checkpoints',
         filename=f'{model_name.replace("/","-")}-' + 'sts-{epoch}-{val_pearson:.2f}',
         save_top_k=1,
         verbose=True,
@@ -266,6 +262,7 @@ if __name__ == '__main__':
     # dataloader = Dataloader(args.model_name, args.batch_size, args.shuffle, args.train_path, args.dev_path,
     #                         args.test_path, args.predict_path)
     # model = Model(args.model_name, args.learning_rate)
+
     wandb.login(key=wandb_config["key"])
     model_name = model_name
     wandb_logger = WandbLogger(
@@ -282,9 +279,9 @@ if __name__ == '__main__':
     checkpoint_file = False
     if checkpoint_config["checkpoint_use"]=="True":
         if checkpoint_config["checkpoint_name"] != None:
-            checkpoint_file = "../checkpoints/" + checkpoint_config['checkpoint_name']
+            checkpoint_file = "./checkpoints/" + checkpoint_config['checkpoint_name']
         else:
-            checkpoint_pattern = f"../checkpoints/*.ckpt"
+            checkpoint_pattern = f"./checkpoints/*.ckpt"
             checkpoint_files = glob.glob(checkpoint_pattern)
             # Sort the list of checkpoint files by val_pearson in descending order
             if checkpoint_config["checkpoint_new_or_best"].lower() == "best":

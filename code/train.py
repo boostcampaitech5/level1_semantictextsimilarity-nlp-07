@@ -244,14 +244,15 @@ if __name__ == '__main__':
 
     # 2023-04-10: 모델에 대한 Callback을 추가합니다.
     # Pytorch Lightning에서 지원하는 Model Checkpoint 저장 및 EarlyStopping을 추가해줍니다.
-    checkpoint_callback = ModelCheckpoint(
-        dirpath='./checkpoints',
-        filename=f'{model_name.replace("/","-")}-' + 'sts-{epoch}-{val_pearson:.2f}',
-        save_top_k=1,
-        verbose=True,
-        monitor='val_pearson',
-        mode='max'
-    )
+    cp_callback = ModelCheckpoint(monitor='val_pearson',    # Pearson coefficient를 기준으로 저장
+                                  verbose=False,            # 중간 출력문을 출력할지 여부. False 시, 없음.
+                                  save_last=True,           # last.ckpt 로 저장됨
+                                  save_top_k=1,             # k개의 최고 성능 체크 포인트를 저장하겠다.
+                                  save_weights_only=True,   # Weight만 저장할지, 학습 관련 정보도 저장할지 여부.
+                                  mode='max',                # 'max' : monitor metric이 증가하면 저장.
+                                  dirpath='./checkpoints',
+                                  filename=f'{model_name.replace("/","-")}-' + 'sts-{epoch}-{val_pearson:.3f}',
+                                  )
 
     early_stop_callback = EarlyStopping(monitor='val_pearson', 
                                         patience=5,         # 2번 이상 validation 성능이 안좋아지면 early stop
@@ -278,7 +279,7 @@ if __name__ == '__main__':
 
     checkpoint_file = False
     if checkpoint_config["checkpoint_use"]=="True":
-        if checkpoint_config["checkpoint_name"] != None:
+        if checkpoint_config["checkpoint_name"] != "":
             checkpoint_file = "./checkpoints/" + checkpoint_config['checkpoint_name']
         else:
             checkpoint_pattern = f"./checkpoints/*.ckpt"
@@ -293,13 +294,13 @@ if __name__ == '__main__':
     if not checkpoint_file:
         model = Model(args.model_name, args.learning_rate, vocab_size, args.loss)
         trainer = pl.Trainer(gpus=1, max_epochs=hyperparameter_config["max_epoch"], log_every_n_steps=1, 
-                             callbacks=[checkpoint_callback, early_stop_callback], 
+                             callbacks=[cp_callback, early_stop_callback], 
                              logger=wandb_logger)
     else:
         # gpu가 없으면 'gpus=0'을, gpu가 여러개면 'gpus=4'처럼 사용하실 gpu의 개수를 입력해주세요
         model = Model.load_from_checkpoint(checkpoint_file)
         trainer = pl.Trainer(gpus=1, max_epochs=hyperparameter_config["max_epoch"], resume_from_checkpoint=checkpoint_file, 
-                             log_every_n_steps=1, callbacks=[checkpoint_callback, early_stop_callback],
+                             log_every_n_steps=1, callbacks=[cp_callback, early_stop_callback],
                                logger=wandb_logger)
 
     # Train part

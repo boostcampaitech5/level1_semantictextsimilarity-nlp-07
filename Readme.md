@@ -49,3 +49,10 @@ requirements.txt
     > inference.py [-h] [--model_name MODEL_NAME] 
                     [--checkpoint_name CHECKPOINT_NAME] [--checkpoint_new_or_best CHECKPOINT_NEW_OR_BEST] 
                     [--batch_size BATCH_SIZE] [--max_epoch MAX_EPOCH] [--shuffle SHUFFLE] [--learning_rate LEARNING_RATE] [--data_path DATA_PATH]
+
+4. checkpoints
+- 기존의 model.pt -> checkpoint.ckpt로 대체
+- args 설명
+    -   checkpoint_use: checkpoint를 사용할 것인지의 여부 
+    -   checkpoint_name: checkpoint의 경로가 아닌 이름.ckpt
+    -   checkpoint_new_or_best: checkpoint_name 미지정시 최근 또는 최고의 모델 자동 선택 input: new, best

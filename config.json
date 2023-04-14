@@ -1,0 +1,16 @@
+{
+    "model": "klue/roberta-small",
+    "hyperparameter": {
+        "batch_size": 16,
+        "max_epoch": 1,
+        "learning_rate": 1e-5,
+        "loss": "L1",
+        "shuffle": true
+    },
+    "wandb": {
+        "username": "",
+        "entity": "",
+        "key": "",
+        "project": "STS"
+    }
+}

@@ -8,6 +8,8 @@ import transformers
 import torch
 import torchmetrics
 import pytorch_lightning as pl
+
+from utils import extract_val_pearson
 import glob
 
 class Dataset(torch.utils.data.Dataset):
@@ -114,7 +116,7 @@ class Dataloader(pl.LightningDataModule):
 
 
 class Model(pl.LightningModule):
-    def __init__(self, model_name, lr):
+    def __init__(self, model_name, lr, vocab_size):
         super().__init__()
         self.save_hyperparameters()
 
@@ -124,6 +126,7 @@ class Model(pl.LightningModule):
         # 사용할 모델을 호출합니다.
         self.plm = transformers.AutoModelForSequenceClassification.from_pretrained(
             pretrained_model_name_or_path=model_name, num_labels=1)
+        self.plm.resize_token_embeddings(vocab_size)
         # Loss 계산을 위해 사용될 L1Loss를 호출합니다.
         self.loss_func = torch.nn.L1Loss()
 
@@ -194,9 +197,13 @@ if __name__ == '__main__':
 
     # Inference part
     # 저장된 모델로 예측을 진행합니다.
-    checkpoint_pattern = f"./checkpoints/sts-*.ckpt"
-    checkpoint_files = glob.glob(checkpoint_pattern)[0]
-    model = Model.load_from_checkpoint(checkpoint_files)
+    checkpoint_pattern = f"./checkpoints/*.ckpt"
+    checkpoint_files = glob.glob(checkpoint_pattern)
+    # Sort the list of checkpoint files by val_pearson in descending order
+    checkpoint_files = sorted(checkpoint_files, key=extract_val_pearson, reverse=True)
+    checkpoint_file = checkpoint_files[0]
+    print(checkpoint_file)
+    model = Model.load_from_checkpoint(checkpoint_file)
     predictions = trainer.predict(model=model, datamodule=dataloader)
 
     # 예측된 결과를 형식에 맞게 반올림하여 준비합니다.
@@ -205,5 +212,5 @@ if __name__ == '__main__':
     # output 형식을 불러와서 예측된 결과로 바꿔주고, output.csv로 출력합니다.
     output = pd.read_csv('./output/sample_submission.csv')
     output['target'] = predictions
-    outputname = 'output_' + checkpoint_files.replace('./checkpoints/', '') + '.csv'
+    outputname = '../output/output_' + checkpoint_file.replace('./checkpoints/', '') + '.csv'
     output.to_csv(outputname, index=False)

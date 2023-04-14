@@ -18,6 +18,8 @@ import random
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
+
+from utils import extract_val_pearson
 import glob
 
 class Dataset(torch.utils.data.Dataset):
@@ -190,9 +192,10 @@ if __name__ == '__main__':
     # 실행 시 '--batch_size=64' 같은 인자를 입력하지 않으면 default 값이 기본으로 실행됩니다
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_name', default='klue/roberta-small', type=str)
-    parser.add_argument('--checkpoint', default=True)
+    parser.add_argument('--checkpoint', default="True", type=str)
+    parser.add_argument('--new_or_best', default='new')
     parser.add_argument('--batch_size', default=16, type=int)
-    parser.add_argument('--max_epoch', default=5, type=int)
+    parser.add_argument('--max_epoch', default=1, type=int)
     parser.add_argument('--shuffle', default=True)
     parser.add_argument('--learning_rate', default=1e-5, type=float)
     parser.add_argument('--data_path', default='./data/', type=str)
@@ -205,7 +208,7 @@ if __name__ == '__main__':
     parser.add_argument('--wandb_project', default='model-comparing')
     parser.add_argument('--wandb_entity', default='leedongho9798')
     parser.add_argument('--random_seed', default=False, type=bool)
-       
+    
     date = datetime.datetime.now().strftime('%Y-%m-%d')
     args = parser.parse_args()
     print(args.model_name)
@@ -244,13 +247,20 @@ if __name__ == '__main__':
     dataloader = Dataloader(args.model_name, args.batch_size, args.shuffle, args.train_path, args.dev_path,
                             args.test_path, args.predict_path)
 
-    if args.checkpoint:
+    checkpoint_file = False
+    if args.checkpoint=="True":
         checkpoint_pattern = f"./checkpoints/*.ckpt"
         checkpoint_files = glob.glob(checkpoint_pattern)
-        
+        # Sort the list of checkpoint files by val_pearson in descending order
+        if args.new_or_best.lower() == "best":
+            checkpoint_files = sorted(checkpoint_files, key=extract_val_pearson, reverse=True)
+        else:
+            checkpoint_files = sorted(checkpoint_files, key=os.path.getctime, reverse=True)
+        checkpoint_file = checkpoint_files[0]
+
     checkpoint_callback = ModelCheckpoint(
         dirpath='checkpoints',
-        filename=f'{args.model_name}-' + 'sts-{epoch}-{val_pearson:.2f}',
+        filename=f'{args.model_name.replace("/","-")}-' + 'sts-{epoch}-{val_pearson:.2f}',
         save_top_k=1,
         verbose=True,
         monitor='val_pearson',
@@ -262,17 +272,15 @@ if __name__ == '__main__':
                                         mode='max'          # 'max' : monitor metric은 최대화되어야 함.
                                         )
     
-    if not checkpoint_files:
+    if not checkpoint_file:
         model = Model(args.model_name, args.learning_rate, vocab_size, args.loss)
         trainer = pl.Trainer(gpus=1, max_epochs=args.max_epoch, log_every_n_steps=1, callbacks=[checkpoint_callback, early_stop_callback], logger=wandb_logger)
     else:
         # gpu가 없으면 'gpus=0'을, gpu가 여러개면 'gpus=4'처럼 사용하실 gpu의 개수를 입력해주세요
-        model = Model.load_from_checkpoint(checkpoint_files[0])
-        trainer = pl.Trainer(gpus=1, max_epochs=args.max_epoch, resume_from_checkpoint=checkpoint_files[0], log_every_n_steps=1, callbacks=[checkpoint_callback, early_stop_callback], logger=wandb_logger)
+        model = Model.load_from_checkpoint(checkpoint_file)
+        trainer = pl.Trainer(gpus=1, max_epochs=args.max_epoch, resume_from_checkpoint=checkpoint_file, log_every_n_steps=1, callbacks=[checkpoint_callback, early_stop_callback], logger=wandb_logger)
 
     # Train part
     trainer.fit(model=model, datamodule=dataloader)
     trainer.test(model=model, datamodule=dataloader)
 
-    # 학습이 완료된 모델을 저장합니다.
-    torch.save(model, 'model.pt')

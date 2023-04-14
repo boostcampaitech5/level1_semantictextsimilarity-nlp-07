@@ -1,6 +1,8 @@
 import argparse
 import datetime
 import os
+import json
+from collections import defaultdict
 
 import pandas as pd
 
@@ -185,6 +187,49 @@ class Model(pl.LightningModule):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr)
         return optimizer
 
+def set_model_name(args):
+    if args.config:
+        with open(args.config) as json_data:
+            data = json.load(json_data)
+        return data["model"]
+    else:
+        return args.model_name
+
+def set_hyperparameter_config(args):
+    hyperparameter_config = defaultdict()
+    if args.config:
+        with open(args.config) as json_data:
+            data = json.load(json_data)
+        hyperparameter_config["batch_size"] = data["hyperparameter"]["batch_size"]
+        hyperparameter_config["max_epoch"] = data["hyperparameter"]["max_epoch"]
+        hyperparameter_config["learning_rate"] = data["hyperparameter"]["learning_rate"]
+        hyperparameter_config["loss"] = data["hyperparameter"]["loss"]
+        hyperparameter_config["shuffle"] = data["hyperparameter"]["shuffle"]
+    else:
+        hyperparameter_config["batch_size"] = args.batch_size
+        hyperparameter_config["max_epoch"] = args.max_epoch
+        hyperparameter_config["learning_rate"] = args.loss
+        hyperparameter_config["loss"] = args.wandb_project
+        hyperparameter_config["shuffle"] = args.shuffle
+    
+    return hyperparameter_config
+
+def set_wandb_config(args):
+    wandb_config = defaultdict()
+    if args.config:
+        with open(args.config) as json_data:
+            data = json.load(json_data)
+        wandb_config["username"] = data["wandb"]["username"]
+        wandb_config["entity"] = data["wandb"]["entity"]
+        wandb_config["key"] = data["wandb"]["key"]
+        wandb_config["project"] = data["wandb"]["project"]
+    else:
+        wandb_config["username"] = args.wandb_username
+        wandb_config["entity"] = args.wandb_entity
+        wandb_config["key"] = args.wandb_key
+        wandb_config["project"] = args.wandb_project
+    
+    return wandb_config
 
 if __name__ == '__main__':    
     # 하이퍼 파라미터 등 각종 설정값을 입력받습니다
@@ -192,29 +237,31 @@ if __name__ == '__main__':
     # 실행 시 '--batch_size=64' 같은 인자를 입력하지 않으면 default 값이 기본으로 실행됩니다
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_name', default='klue/roberta-small', type=str)
+    parser.add_argument('--batch_size', default=16, type=int)
     parser.add_argument('--checkpoint', default="True", type=str)
     parser.add_argument('--new_or_best', default='new')
-    parser.add_argument('--batch_size', default=16, type=int)
-    parser.add_argument('--max_epoch', default=1, type=int)
+    parser.add_argument('--max_epoch', default=5, type=int)
     parser.add_argument('--shuffle', default=True)
     parser.add_argument('--learning_rate', default=1e-5, type=float)
+    parser.add_argument('--loss', default='L1', type=str)
+    parser.add_argument('--shuffle', default=True)
+
     parser.add_argument('--data_path', default='./data/', type=str)
     parser.add_argument('--train_path', default='./data/train.csv')
     parser.add_argument('--dev_path', default='./data/dev.csv')
     parser.add_argument('--test_path', default='./data/dev.csv')
     parser.add_argument('--predict_path', default='./data/test.csv')
-    parser.add_argument('--loss', default='L1', type=str)
-    parser.add_argument('--wandb_username', default='username')
-    parser.add_argument('--wandb_project', default='model-comparing')
+    parser.add_argument('--random_seed', default=False, type=bool)
+
+    parser.add_argument('--wandb_username', default='leedongho9798')
     parser.add_argument('--wandb_entity', default='leedongho9798')
     parser.add_argument('--random_seed', default=False, type=bool)
-    
+    parser.add_argument('--wandb_key', default='a150cd5b7d387493ae18a4694a81a6dd933ba72b')
+    parser.add_argument('--wandb_project', default='STS')
+    parser.add_argument('--config', default=False, type=str, help='config file')
+       
     date = datetime.datetime.now().strftime('%Y-%m-%d')
     args = parser.parse_args()
-    print(args.model_name)
-    print(args.batch_size)
-    print(args.learning_rate)
-    print(args.loss)
     
     train_path = args.data_path + 'train.csv'
     dev_path = args.data_path + 'dev.csv'
@@ -230,22 +277,41 @@ if __name__ == '__main__':
         torch.backends.cudnn.benchmark = False
         np.random.seed(global_seed)
         random.seed(global_seed)
+    model_name = set_model_name(args)
+    hyperparameter_config = set_hyperparameter_config(args)
+    wandb_config = set_wandb_config(args)
 
-    wandb.login(key='a150cd5b7d387493ae18a4694a81a6dd933ba72b')
-    model_name = args.model_name
+    # 2023-04-10: 모델에 대한 Callback을 추가합니다.
+    # Pytorch Lightning에서 지원하는 Model Checkpoint 저장 및 EarlyStopping을 추가해줍니다.
+    cp_callback = ModelCheckpoint(monitor='val_pearson',    # Pearson coefficient를 기준으로 저장
+                                  verbose=False,            # 중간 출력문을 출력할지 여부. False 시, 없음.
+                                  save_last=True,           # last.ckpt 로 저장됨
+                                  save_top_k=1,             # k개의 최고 성능 체크 포인트를 저장하겠다.
+                                  save_weights_only=True,   # Weight만 저장할지, 학습 관련 정보도 저장할지 여부.
+                                  mode='max'                # 'max' : monitor metric이 증가하면 저장.
+                                  )
+    early_stop_callback = EarlyStopping(monitor='val_pearson', 
+                                        patience=2,         # 2번 이상 validation 성능이 안좋아지면 early stop
+                                        mode='max'          # 'max' : monitor metric은 최대화되어야 함.
+                                        )
+
+    # dataloader와 model을 생성합니다.
+    # dataloader = Dataloader(args.model_name, args.batch_size, args.shuffle, args.train_path, args.dev_path,
+    #                         args.test_path, args.predict_path)
+    # model = Model(args.model_name, args.learning_rate)
+
+    wandb.login(key=wandb_config["key"])
+    model_name = model_name
     wandb_logger = WandbLogger(
         log_model="all",
-        name=f'{args.model_name.replace("/","-")}_{args.batch_size}_{args.learning_rate:.3e}_{args.loss}_{date}',
-        project=args.wandb_project+'_'+args.loss, 
-        entity=args.wandb_entity
+        name=f'{model_name.replace("/","-")}_{hyperparameter_config["batch_size"]}_{hyperparameter_config["learning_rate"]:.3e}_{hyperparameter_config["loss"]}_{date}',
+        project=wandb_config["project"]+'_'+hyperparameter_config["loss"], 
+        entity=wandb_config["entity"]
     )
-    dataloader = Dataloader(args.model_name, args.batch_size, args.shuffle, train_path, dev_path, 
+    dataloader = Dataloader(model_name, hyperparameter_config["batch_size"], hyperparameter_config["shuffle"], train_path, dev_path, 
                                     test_path, predict_path)
     vocab_size = len(dataloader.tokenizer)
     print("LL", vocab_size)
-    # dataloader와 model을 생성합니다.
-    dataloader = Dataloader(args.model_name, args.batch_size, args.shuffle, args.train_path, args.dev_path,
-                            args.test_path, args.predict_path)
 
     checkpoint_file = False
     if args.checkpoint=="True":
@@ -274,13 +340,16 @@ if __name__ == '__main__':
     
     if not checkpoint_file:
         model = Model(args.model_name, args.learning_rate, vocab_size, args.loss)
-        trainer = pl.Trainer(gpus=1, max_epochs=args.max_epoch, log_every_n_steps=1, callbacks=[checkpoint_callback, early_stop_callback], logger=wandb_logger)
+        trainer = pl.Trainer(gpus=1, max_epochs=hyperparameter_config["max_epoch"], log_every_n_steps=1, 
+                             callbacks=[checkpoint_callback, early_stop_callback], 
+                             logger=wandb_logger)
     else:
         # gpu가 없으면 'gpus=0'을, gpu가 여러개면 'gpus=4'처럼 사용하실 gpu의 개수를 입력해주세요
         model = Model.load_from_checkpoint(checkpoint_file)
-        trainer = pl.Trainer(gpus=1, max_epochs=args.max_epoch, resume_from_checkpoint=checkpoint_file, log_every_n_steps=1, callbacks=[checkpoint_callback, early_stop_callback], logger=wandb_logger)
+        trainer = pl.Trainer(gpus=1, max_epochs=hyperparameter_config["max_epoch"], resume_from_checkpoint=checkpoint_file, 
+                             log_every_n_steps=1, callbacks=[checkpoint_callback, early_stop_callback],
+                               logger=wandb_logger)
 
     # Train part
     trainer.fit(model=model, datamodule=dataloader)
     trainer.test(model=model, datamodule=dataloader)
-

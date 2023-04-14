@@ -1,8 +1,6 @@
 import argparse
 import datetime
 import os
-import json
-from collections import defaultdict
 
 import pandas as pd
 
@@ -22,6 +20,10 @@ from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
 
 from utils import extract_val_pearson
+from utils import set_model_name
+from utils import set_hyperparameter_config
+from utils import set_checkpoint_config
+from utils import set_wandb_config
 import glob
 
 class Dataset(torch.utils.data.Dataset):
@@ -187,61 +189,6 @@ class Model(pl.LightningModule):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr)
         return optimizer
 
-def set_model_name(args):
-    if args.config:
-        with open(args.config) as json_data:
-            data = json.load(json_data)
-        return data["model"]
-    else:
-        return args.model_name
-
-def set_hyperparameter_config(args):
-    hyperparameter_config = defaultdict()
-    if args.config:
-        with open(args.config) as json_data:
-            data = json.load(json_data)
-        hyperparameter_config["batch_size"] = data["hyperparameter"]["batch_size"]
-        hyperparameter_config["max_epoch"] = data["hyperparameter"]["max_epoch"]
-        hyperparameter_config["learning_rate"] = data["hyperparameter"]["learning_rate"]
-        hyperparameter_config["loss"] = data["hyperparameter"]["loss"]
-        hyperparameter_config["shuffle"] = data["hyperparameter"]["shuffle"]
-    else:
-        hyperparameter_config["batch_size"] = args.batch_size
-        hyperparameter_config["max_epoch"] = args.max_epoch
-        hyperparameter_config["learning_rate"] = args.loss
-        hyperparameter_config["loss"] = args.wandb_project
-        hyperparameter_config["shuffle"] = args.shuffle
-    
-    return hyperparameter_config
-
-def set_wandb_config(args):
-    wandb_config = defaultdict()
-    if args.config:
-        with open(args.config) as json_data:
-            data = json.load(json_data)
-        wandb_config["username"] = data["wandb"]["username"]
-        wandb_config["entity"] = data["wandb"]["entity"]
-        wandb_config["key"] = data["wandb"]["key"]
-        wandb_config["project"] = data["wandb"]["project"]
-    else:
-        wandb_config["username"] = args.wandb_username
-        wandb_config["entity"] = args.wandb_entity
-        wandb_config["key"] = args.wandb_key
-        wandb_config["project"] = args.wandb_project
-    
-    return wandb_config
-
-def set_checkpoint_config(args):
-    checkpoint_config = defaultdict()
-    if args.config:
-        with open(args.config) as json_data:
-            data = json.load(json_data)
-        checkpoint_config["checkpoint"] = data["checkpoint"]["checkpoint"]
-        checkpoint_config["new_or_best"] = data["checkpoint"]["new_or_best"]
-    else:
-        checkpoint_config["checkpoint"] = args.checkpoint
-        checkpoint_config["new_or_best"] = args.new_or_best
-
 if __name__ == '__main__':    
     # 하이퍼 파라미터 등 각종 설정값을 입력받습니다
     # 터미널 실행 예시 : python3 run.py --batch_size=64 ...
@@ -272,10 +219,10 @@ if __name__ == '__main__':
     date = datetime.datetime.now().strftime('%Y-%m-%d')
     args = parser.parse_args()
     
-    train_path = args.data_path + 'train.csv'
-    dev_path = args.data_path + 'dev.csv'
-    test_path = args.data_path + 'dev.csv'
-    predict_path = args.data_path + 'test.csv'
+    train_path = '../data/train.csv'
+    dev_path = '../data/dev.csv'
+    test_path = '../data/dev.csv'
+    predict_path = '../data/test.csv'
         
     if args.random_seed:
         global_seed = 777
@@ -289,13 +236,14 @@ if __name__ == '__main__':
     
     model_name = set_model_name(args)
     hyperparameter_config = set_hyperparameter_config(args)
+    checkpoint_config = set_checkpoint_config(args)
     wandb_config = set_wandb_config(args)
 
     # 2023-04-10: 모델에 대한 Callback을 추가합니다.
     # Pytorch Lightning에서 지원하는 Model Checkpoint 저장 및 EarlyStopping을 추가해줍니다.
     checkpoint_callback = ModelCheckpoint(
-        dirpath='checkpoints',
-        filename=f'{args.model_name.replace("/","-")}-' + 'sts-{epoch}-{val_pearson:.2f}',
+        dirpath='../checkpoints',
+        filename=f'{model_name.replace("/","-")}-' + 'sts-{epoch}-{val_pearson:.2f}',
         save_top_k=1,
         verbose=True,
         monitor='val_pearson',
@@ -326,15 +274,14 @@ if __name__ == '__main__':
     print("LL", vocab_size)
 
     checkpoint_file = False
-    if args.checkpoint=="True":
-        checkpoint_pattern = f"./checkpoints/*.ckpt"
+    if checkpoint_config["checkpoint"]=="True":
+        checkpoint_pattern = f"../checkpoints/*.ckpt"
         checkpoint_files = glob.glob(checkpoint_pattern)
         # Sort the list of checkpoint files by val_pearson in descending order
-        if args.new_or_best.lower() == "best":
+        if checkpoint_config["new_or_best"].lower() == "best":
             checkpoint_files = sorted(checkpoint_files, key=extract_val_pearson, reverse=True)
         else:
             checkpoint_files = sorted(checkpoint_files, key=os.path.getctime, reverse=True)
-        checkpoint_file = checkpoint_files[0]
     
     if not checkpoint_file:
         model = Model(args.model_name, args.learning_rate, vocab_size, args.loss)
@@ -342,6 +289,7 @@ if __name__ == '__main__':
                              callbacks=[checkpoint_callback, early_stop_callback], 
                              logger=wandb_logger)
     else:
+        checkpoint_file = checkpoint_files[0]
         # gpu가 없으면 'gpus=0'을, gpu가 여러개면 'gpus=4'처럼 사용하실 gpu의 개수를 입력해주세요
         model = Model.load_from_checkpoint(checkpoint_file)
         trainer = pl.Trainer(gpus=1, max_epochs=hyperparameter_config["max_epoch"], resume_from_checkpoint=checkpoint_file, 

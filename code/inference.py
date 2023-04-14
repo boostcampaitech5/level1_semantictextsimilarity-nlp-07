@@ -114,7 +114,7 @@ class Dataloader(pl.LightningDataModule):
 
 
 class Model(pl.LightningModule):
-    def __init__(self, model_name, lr):
+    def __init__(self, model_name, lr, loss="L1"):
         super().__init__()
         self.save_hyperparameters()
 
@@ -125,7 +125,11 @@ class Model(pl.LightningModule):
         self.plm = transformers.AutoModelForSequenceClassification.from_pretrained(
             pretrained_model_name_or_path=model_name, num_labels=1)
         # Loss 계산을 위해 사용될 L1Loss를 호출합니다.
-        self.loss_func = torch.nn.L1Loss()
+        # L1 loss가 아닌 MSE loss (=L2 loss)도 사용해봅시다. 
+        if loss == "MSE":
+            self.loss_func = torch.nn.MSELoss()
+        else:
+            self.loss_func = torch.nn.L1Loss()
 
     def forward(self, x):
         x = self.plm(x)['logits']
@@ -178,6 +182,7 @@ if __name__ == '__main__':
     parser.add_argument('--shuffle', default=True)
     parser.add_argument('--learning_rate', default=1e-5, type=float)
     parser.add_argument('--data_path', default='./data/', type=str)
+    parser.add_argument('--loss', default='L1', type=str)
     args = parser.parse_args()
 
     train_path = args.data_path + 'train.csv'

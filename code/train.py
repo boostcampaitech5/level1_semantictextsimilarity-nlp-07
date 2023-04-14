@@ -295,7 +295,7 @@ if __name__ == '__main__':
     # dataloader = Dataloader(args.model_name, args.batch_size, args.shuffle, args.train_path, args.dev_path,
     #                         args.test_path, args.predict_path)
     # model = Model(args.model_name, args.learning_rate)
-
+    print("HI")
     wandb.login(key=wandb_config["key"])
     model_name = model_name
     wandb_logger = WandbLogger(

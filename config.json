@@ -7,10 +7,14 @@
         "loss": "L1",
         "shuffle": true
     },
+    "checkpoint": {
+        "checkpoint": "True",
+        "new_or_best": "new"
+    },
     "wandb": {
-        "username": "",
-        "entity": "",
-        "key": "",
+        "username": "leedongho9798",
+        "entity": "leedongho9798",
+        "key": "a150cd5b7d387493ae18a4694a81a6dd933ba72b",
         "project": "STS"
     }
 }

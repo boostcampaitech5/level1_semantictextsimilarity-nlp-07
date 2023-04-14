@@ -1,0 +1,8 @@
+{
+    "wandb": {
+        "username": "",
+        "entity": "",
+        "key": "",
+        "project": "STS"
+    }
+}

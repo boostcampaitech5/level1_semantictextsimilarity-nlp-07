@@ -1,6 +1,8 @@
 import argparse
 import datetime
 import os
+import json
+from collections import defaultdict
 
 import pandas as pd
 
@@ -176,6 +178,22 @@ class Model(pl.LightningModule):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr)
         return optimizer
 
+def set_wandb_config(args):
+    wandb_config = defaultdict()
+    if args.config:
+        with open(args.config) as json_data:
+            data = json.load(json_data)
+        wandb_config["username"] = data["wandb"]["username"]
+        wandb_config["entity"] = data["wandb"]["entity"]
+        wandb_config["key"] = data["wandb"]["key"]
+        wandb_config["project"] = data["wandb"]["project"]
+    else:
+        wandb_config["username"] = args.wandb_username
+        wandb_config["entity"] = args.wandb_entity
+        wandb_config["key"] = args.wandb_key
+        wandb_config["project"] = args.wandb_project
+    
+    return wandb_config
 
 if __name__ == '__main__':    
     # 하이퍼 파라미터 등 각종 설정값을 입력받습니다
@@ -191,11 +209,13 @@ if __name__ == '__main__':
     parser.add_argument('--dev_path', default='./new_data/dev.csv')
     parser.add_argument('--test_path', default='./new_data/dev.csv')
     parser.add_argument('--predict_path', default='./new_data/test.csv')
-    
-    parser.add_argument('--wandb_username', default='hsp9308')
-    parser.add_argument('--wandb_project', default='STS')
-    parser.add_argument('--wandb_entity', default='hsp9308')
     parser.add_argument('--random', default=False, type=bool)
+
+    parser.add_argument('--wandb_username', default='username')
+    parser.add_argument('--wandb_entity', default='username')
+    parser.add_argument('--wandb_key', default='key')
+    parser.add_argument('--wandb_project', default='STS')
+    parser.add_argument('--config', default=False, type=str, help='config file')
        
     date = datetime.datetime.now().strftime('%Y-%m-%d')
     args = parser.parse_args()
@@ -212,7 +232,9 @@ if __name__ == '__main__':
         torch.backends.cudnn.benchmark = False
         np.random.seed(global_seed)
         random.seed(global_seed)
-    
+
+    wandb_config = set_wandb_config(args)
+
     # 2023-04-10: 모델에 대한 Callback을 추가합니다.
     # Pytorch Lightning에서 지원하는 Model Checkpoint 저장 및 EarlyStopping을 추가해줍니다.
     cp_callback = ModelCheckpoint(monitor='val_pearson',    # Pearson coefficient를 기준으로 저장
@@ -248,11 +270,11 @@ if __name__ == '__main__':
         'name' : args.model_name.replace('/','_'),
         'metric' : {'name':'val_pearson', 'goal':'maximize'},
         # 'early_terminate' : {'type' : 'hyperband', 'max_iter': 10, 's': 2, 'eta': 3}, # Hyperparameter tuning details
-        'entity': 'hsp9308', 
+        'entity': wandb_config["entity"], 
         'project': args.model_name.replace('/','_')
     }
 
-    wandb.login(key='your_key')
+    wandb.login(key=wandb_config["key"])
 
     def sweep_train(config=None):
         wandb.init(config=config)
@@ -264,7 +286,7 @@ if __name__ == '__main__':
             log_model="all",
             name=f'{args.model_name.replace("/","-")}_{args.batch_size}_{config.lr:.3e}_{date}',
             project=args.model_name.replace('/','-'), 
-            entity=args.wandb_entity
+            entity=wandb_config["entity"]
         )
         trainer = pl.Trainer(accelerator='gpu', devices=1, max_epochs=5, log_every_n_steps=2, logger=wandb_logger, 
                              callbacks=[cp_callback,

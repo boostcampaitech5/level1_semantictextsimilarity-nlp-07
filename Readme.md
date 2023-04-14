@@ -23,7 +23,8 @@ Readme.md
 requirements.txt   
 
 ## Usage
-1. setting(config.json 파일 사용 시)   
+1. setting(config.json 파일 사용 시)
+- config.json.tab -> config.json으로 만든 후 사용   
 - config.json 파일을 열어 필요한 사항을 확인
     - model
     - hyperparameter

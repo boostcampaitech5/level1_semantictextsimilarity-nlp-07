@@ -200,9 +200,9 @@ if __name__ == '__main__':
     parser.add_argument('--test_path', default='./data/dev.csv')
     parser.add_argument('--predict_path', default='./data/test.csv')
     parser.add_argument('--loss', default='L1', type=str)
-    parser.add_argument('--wandb_username', default='username')
+    parser.add_argument('--wandb_username', default='jaekwanyda')
     parser.add_argument('--wandb_project', default='model-comparing')
-    parser.add_argument('--wandb_entity', default='username')
+    parser.add_argument('--wandb_entity', default='jaekwanyda')
     parser.add_argument('--random_seed', default=False, type=bool)
        
     date = datetime.datetime.now().strftime('%Y-%m-%d')
@@ -246,7 +246,7 @@ if __name__ == '__main__':
     #                         args.test_path, args.predict_path)
     # model = Model(args.model_name, args.learning_rate)
 
-    wandb.login(key='6647e7f61a07d44fc1c727d6dc54f391aa44f527')
+    wandb.login(key='763570626c3fcdab96634737527c04c50413833b')
     model_name = args.model_name
     wandb_logger = WandbLogger(
         log_model="all",

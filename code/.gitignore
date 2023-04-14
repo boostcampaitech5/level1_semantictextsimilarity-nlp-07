@@ -14,4 +14,7 @@ output.csv
 # checkpoint
 /checkpoints
 
+# wandb
+/wandb
+
 # refer Jiho-Hong

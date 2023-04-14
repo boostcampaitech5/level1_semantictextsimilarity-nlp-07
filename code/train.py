@@ -203,7 +203,7 @@ if __name__ == '__main__':
     parser.add_argument('--loss', default='L1', type=str)
     parser.add_argument('--wandb_username', default='username')
     parser.add_argument('--wandb_project', default='model-comparing')
-    parser.add_argument('--wandb_entity', default='username')
+    parser.add_argument('--wandb_entity', default='leedongho9798')
     parser.add_argument('--random_seed', default=False, type=bool)
        
     date = datetime.datetime.now().strftime('%Y-%m-%d')
@@ -228,7 +228,7 @@ if __name__ == '__main__':
         np.random.seed(global_seed)
         random.seed(global_seed)
 
-    wandb.login(key='6647e7f61a07d44fc1c727d6dc54f391aa44f527')
+    wandb.login(key='a150cd5b7d387493ae18a4694a81a6dd933ba72b')
     model_name = args.model_name
     wandb_logger = WandbLogger(
         log_model="all",
@@ -243,7 +243,6 @@ if __name__ == '__main__':
     # dataloader와 model을 생성합니다.
     dataloader = Dataloader(args.model_name, args.batch_size, args.shuffle, args.train_path, args.dev_path,
                             args.test_path, args.predict_path)
-    model = Model(args.model_name, args.learning_rate)
 
     if args.checkpoint:
         checkpoint_pattern = f"./checkpoints/*.ckpt"
@@ -259,16 +258,17 @@ if __name__ == '__main__':
     )
 
     early_stop_callback = EarlyStopping(monitor='val_pearson', 
-                                        patience=2,         # 2번 이상 validation 성능이 안좋아지면 early stop
+                                        patience=5,         # 2번 이상 validation 성능이 안좋아지면 early stop
                                         mode='max'          # 'max' : monitor metric은 최대화되어야 함.
                                         )
     
     if not checkpoint_files:
         model = Model(args.model_name, args.learning_rate, vocab_size, args.loss)
-        trainer = pl.Trainer(gpus=1, max_epochs=args.max_epoch, log_every_n_steps=1, callbacks=[checkpoint_callback, early_stop_callback])
+        trainer = pl.Trainer(gpus=1, max_epochs=args.max_epoch, log_every_n_steps=1, callbacks=[checkpoint_callback, early_stop_callback], logger=wandb_logger)
     else:
         # gpu가 없으면 'gpus=0'을, gpu가 여러개면 'gpus=4'처럼 사용하실 gpu의 개수를 입력해주세요
-        trainer = pl.Trainer(gpus=1, max_epochs=args.max_epoch, resume_from_checkpoint=checkpoint_files[0], log_every_n_steps=1, callbacks=[checkpoint_callback])
+        model = Model.load_from_checkpoint(checkpoint_files[0])
+        trainer = pl.Trainer(gpus=1, max_epochs=args.max_epoch, resume_from_checkpoint=checkpoint_files[0], log_every_n_steps=1, callbacks=[checkpoint_callback, early_stop_callback], logger=wandb_logger)
 
     # Train part
     trainer.fit(model=model, datamodule=dataloader)

@@ -121,8 +121,26 @@ class Dataloader(pl.LightningDataModule):
 
     def predict_dataloader(self):
         return torch.utils.data.DataLoader(self.predict_dataset, batch_size=self.batch_size)
+## scheduler ISR define
+from torch.optim.lr_scheduler import LambdaLR
 
 
+class InverseSqrtScheduler(LambdaLR):
+    """ Linear warmup and then follows an inverse square root decay schedule
+        Linearly increases learning rate schedule from 0 to 1 over `warmup_steps` training steps.
+        Afterward, learning rate follows an inverse square root decay schedule.
+    """
+
+    def __init__(self, optimizer, warmup_steps, last_epoch=-1):
+        def lr_lambda(step):
+            if step < warmup_steps:
+                return float(step) / float(max(1.0, warmup_steps))
+            
+            decay_factor = warmup_steps ** 0.5
+            return decay_factor * step ** -0.5
+
+        super(InverseSqrtScheduler, self).__init__(optimizer, lr_lambda, last_epoch=last_epoch)
+###
 class Model(pl.LightningModule):
     def __init__(self, model_name, lr, vocab_size, loss="L1"):
         super().__init__()
@@ -181,11 +199,12 @@ class Model(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr)
-        lr_scheduler = {
-            'scheduler': torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.5),
-            'nmae': 'Step_scheduler'
-        }
-        return [optimizer], [lr_scheduler]
+        lr_scheduler = InverseSqrtScheduler(optimizer, self.hparams.warmup_steps)
+        sch_config = {
+		"scheduler": lr_scheduler,
+		"interval": "step",
+	    }
+        return [optimizer], [sch_config]
 
 
 if __name__ == '__main__':    
@@ -254,7 +273,7 @@ if __name__ == '__main__':
     model_name = args.model_name
     wandb_logger = WandbLogger(
         log_model="all",
-        name=f'{args.model_name.replace("/","-")}_{args.batch_size}_{args.learning_rate:.3e}_{args.loss}_{date}',
+        name=f'{args.model_name.replace("/","-")}_{args.batch_size}_{args.learning_rate:.3e}_{args.loss}_{date}_ISR',
         project=args.wandb_project+'_'+args.loss, 
         entity=args.wandb_entity
     )

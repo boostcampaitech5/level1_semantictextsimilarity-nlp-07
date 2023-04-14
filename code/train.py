@@ -116,7 +116,7 @@ class Dataloader(pl.LightningDataModule):
             self.predict_dataset = Dataset(predict_inputs, [])
 
     def train_dataloader(self):
-        return torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=args.shuffle)
+        return torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=self.shuffle)
 
     def val_dataloader(self):
         return torch.utils.data.DataLoader(self.val_dataset, batch_size=self.batch_size)
@@ -292,14 +292,14 @@ if __name__ == '__main__':
             checkpoint_file = checkpoint_files[0]
 
     if not checkpoint_file:
-        model = Model(args.model_name, args.learning_rate, vocab_size, args.loss)
-        trainer = pl.Trainer(gpus=1, max_epochs=hyperparameter_config["max_epoch"], log_every_n_steps=1, 
+        model = Model(model_name, hyperparameter_config['learning_rate'], vocab_size, hyperparameter_config['loss'])
+        trainer = pl.Trainer(accelerator='gpu', max_epochs=hyperparameter_config["max_epoch"], log_every_n_steps=1, 
                              callbacks=[cp_callback, early_stop_callback], 
                              logger=wandb_logger)
     else:
         # gpu가 없으면 'gpus=0'을, gpu가 여러개면 'gpus=4'처럼 사용하실 gpu의 개수를 입력해주세요
         model = Model.load_from_checkpoint(checkpoint_file)
-        trainer = pl.Trainer(gpus=1, max_epochs=hyperparameter_config["max_epoch"], resume_from_checkpoint=checkpoint_file, 
+        trainer = pl.Trainer(accelerator='gpu', max_epochs=hyperparameter_config["max_epoch"], resume_from_checkpoint=checkpoint_file, 
                              log_every_n_steps=1, callbacks=[cp_callback, early_stop_callback],
                                logger=wandb_logger)
 

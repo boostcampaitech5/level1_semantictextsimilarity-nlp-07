@@ -7,10 +7,18 @@
 # log
 /lightning_logs
 
+# checkpoints
+/checkpoints
+
 # output
 /output
 
 # wandb
 /wandb
+/code/wandb
 
-*.ckpt
+# lightning_logs
+/code/lightning_logs
+
+# pycache
+/code/__pycache__

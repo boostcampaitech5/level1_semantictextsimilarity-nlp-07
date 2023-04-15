@@ -2,7 +2,7 @@
     "model": "snunlp/KR-ELECTRA-discriminator",
     "hyperparameter": {
         "batch_size": 32,
-        "max_epoch": 1,
+        "max_epoch": 20,
         "learning_rate": 1e-5,
         "loss": "L1",
         "shuffle": true

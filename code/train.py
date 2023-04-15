@@ -121,8 +121,26 @@ class Dataloader(pl.LightningDataModule):
 
     def predict_dataloader(self):
         return torch.utils.data.DataLoader(self.predict_dataset, batch_size=self.batch_size)
+## scheduler ISR define
+from torch.optim.lr_scheduler import LambdaLR
 
 
+class InverseSqrtScheduler(LambdaLR):
+    """ Linear warmup and then follows an inverse square root decay schedule
+        Linearly increases learning rate schedule from 0 to 1 over `warmup_steps` training steps.
+        Afterward, learning rate follows an inverse square root decay schedule.
+    """
+
+    def __init__(self, optimizer, warmup_steps, last_epoch=-1):
+        def lr_lambda(step):
+            if step < warmup_steps:
+                return float(step) / float(max(1.0, warmup_steps))
+            
+            decay_factor = warmup_steps ** 0.5
+            return decay_factor * step ** -0.5
+
+        super(InverseSqrtScheduler, self).__init__(optimizer, lr_lambda, last_epoch=last_epoch)
+###
 class Model(pl.LightningModule):
     def __init__(self, model_name, lr, vocab_size, loss="L1"):
         super().__init__()
@@ -181,7 +199,12 @@ class Model(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr)
-        return optimizer
+        lr_scheduler = InverseSqrtScheduler(optimizer, self.hparams.warmup_steps)
+        sch_config = {
+		"scheduler": lr_scheduler,
+		"interval": "step",
+	    }
+        return [optimizer], [sch_config]
 
 
 if __name__ == '__main__':    
@@ -200,9 +223,9 @@ if __name__ == '__main__':
     parser.add_argument('--test_path', default='./data/dev.csv')
     parser.add_argument('--predict_path', default='./data/test.csv')
     parser.add_argument('--loss', default='L1', type=str)
-    parser.add_argument('--wandb_username', default='username')
+    parser.add_argument('--wandb_username', default='jaekwanyda')
     parser.add_argument('--wandb_project', default='model-comparing')
-    parser.add_argument('--wandb_entity', default='username')
+    parser.add_argument('--wandb_entity', default='jaekwanyda')
     parser.add_argument('--random_seed', default=False, type=bool)
        
     date = datetime.datetime.now().strftime('%Y-%m-%d')
@@ -246,11 +269,11 @@ if __name__ == '__main__':
     #                         args.test_path, args.predict_path)
     # model = Model(args.model_name, args.learning_rate)
 
-    wandb.login(key='6647e7f61a07d44fc1c727d6dc54f391aa44f527')
+    wandb.login(key='763570626c3fcdab96634737527c04c50413833b')
     model_name = args.model_name
     wandb_logger = WandbLogger(
         log_model="all",
-        name=f'{args.model_name.replace("/","-")}_{args.batch_size}_{args.learning_rate:.3e}_{args.loss}_{date}',
+        name=f'{args.model_name.replace("/","-")}_{args.batch_size}_{args.learning_rate:.3e}_{args.loss}_{date}_ISR',
         project=args.wandb_project+'_'+args.loss, 
         entity=args.wandb_entity
     )

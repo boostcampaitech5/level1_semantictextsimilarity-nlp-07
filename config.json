@@ -1,7 +1,7 @@
 {
-    "model": "klue/roberta-small",
+    "model": "snunlp/KR-ELECTRA-discriminator",
     "hyperparameter": {
-        "batch_size": 16,
+        "batch_size": 32,
         "max_epoch": 1,
         "learning_rate": 1e-5,
         "loss": "L1",

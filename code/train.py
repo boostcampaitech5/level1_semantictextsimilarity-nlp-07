@@ -201,12 +201,7 @@ class Model(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr)
-        lr_scheduler = InverseSqrtScheduler(optimizer, self.hparams.warmup_steps)
-        sch_config = {
-		"scheduler": lr_scheduler,
-		"interval": "step",
-	    }
-        return [optimizer], [sch_config]
+        return [optimizer]
 
 def set_model_name(args):
     if args.config:
@@ -310,7 +305,7 @@ if __name__ == '__main__':
                                   mode='max'                # 'max' : monitor metric이 증가하면 저장.
                                   )
     early_stop_callback = EarlyStopping(monitor='val_pearson', 
-                                        patience=2,         # 2번 이상 validation 성능이 안좋아지면 early stop
+                                        patience=5,         # 2번 이상 validation 성능이 안좋아지면 early stop
                                         mode='max'          # 'max' : monitor metric은 최대화되어야 함.
                                         )
 
@@ -323,7 +318,7 @@ if __name__ == '__main__':
     model_name = model_name
     wandb_logger = WandbLogger(
         log_model="all",
-        name=f'{model_name.replace("/","-")}_{hyperparameter_config["batch_size"]}_{hyperparameter_config["learning_rate"]:.3e}_{hyperparameter_config["loss"]}_{date}',
+        name=f'{model_name.replace("/","-")}_{hyperparameter_config["batch_size"]}_{hyperparameter_config["learning_rate"]:.3e}_{hyperparameter_config["loss"]}_{date}_swapping',
         project=wandb_config["project"]+'_'+hyperparameter_config["loss"], 
         entity=wandb_config["entity"]
     )

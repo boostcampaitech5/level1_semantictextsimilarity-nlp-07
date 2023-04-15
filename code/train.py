@@ -30,17 +30,15 @@ from utils import set_wandb_config
 import glob
 
 class OverSampler(Sampler):
-    """Over Sampling
-    Provides equal representation of target classes in each batch
+    """Over Sampling Sampler
+    providing uniform distribution of target labels in each batch
     """
     def __init__(self, targets):
         """
         Arguments
         ---------
-        class_vector : torch tensor
-            a vector of class labels
-        batch_size : integer
-            batch_size
+        targets
+            a list of class labels
         """
         self.targets = targets
         self.num_samples = len(targets)
@@ -48,8 +46,11 @@ class OverSampler(Sampler):
         target_list = targets
         target_bin = np.floor(np.array(targets) * 2.0) / 2.0
         bin_count = Counter(target_bin.reshape(-1))
+        # 0.5 단위로 binning하되, 5.0은 4.5로 분류되게끔 처리
         bin_count[4.5] += bin_count[5.0]
         bin_count[5.0] = bin_count[4.5]
+        # 각 데이터 샘플이 뽑힐 확률에 대한 가중치를 weights로 저장.
+        # np.sum(weights) != 1.0 이어도 됩니다. 
         weights = [1.0 / bin_count[np.floor(2.0*label[0])/2.0] for label in targets]
 
         self.weights = torch.DoubleTensor(weights)

@@ -12,3 +12,5 @@
 
 # wandb
 /wandb
+
+*.ckpt

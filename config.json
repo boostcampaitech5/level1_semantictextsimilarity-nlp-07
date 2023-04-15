@@ -8,9 +8,9 @@
         "shuffle": true
     },
     "wandb": {
-        "username": "",
-        "entity": "",
-        "key": "",
+        "username": "jaekwanyda",
+        "entity": "jaekwanyda",
+        "key": "ea8cb756af4a7c71f173a9f63bc33ac3c1c99232",
         "project": "STS"
     }
 }

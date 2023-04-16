@@ -1,3 +1,4 @@
+from imblearn.over_sampling import RandomOverSampler
 import argparse
 import datetime
 import os
@@ -76,15 +77,31 @@ class Dataloader(pl.LightningDataModule):
     def preprocessing(self, data):
         # 안쓰는 컬럼을 삭제합니다.
         data = data.drop(columns=self.delete_columns)
-
-        # 타겟 데이터가 없으면 빈 배열을 리턴합니다.
+        
+        # train data라면 random oversampling을 사용합니다.
+        if data['sentence_1'][0] == '스릴도있고 반전도 있고 여느 한국영화 쓰레기들하고는 차원이 다르네요~':
+            num = 10
+            all_ = data[(data['label'] >= (5/num)*(num-1)) & (data['label'] <= (5/num)*(num))]
+            all_['semi-label'] = num-1
+            for n in range(num-1):
+                new = data[(data['label'] >= (5/num)*n) & (data['label'] < (5/num)*(n+1))]
+                new['semi-label'] = n
+                all_ = pd.concat([all_, new])
+            temp_train_inputs = all_.loc[:, ['sentence_1', 'sentence_2', 'label']]
+            temp_train_targets = all_['semi-label']
+            ros = RandomOverSampler(random_state=42, sampling_strategy='all')
+            train_inputs_resampled, train_targets_resampled = ros.fit_resample(temp_train_inputs, temp_train_targets)
+            data = train_inputs_resampled
+        
+       # 타겟 데이터가 없으면 빈 배열을 리턴합니다.
         try:
             targets = data[self.target_columns].values.tolist()
         except:
             targets = []
         # 텍스트 데이터를 전처리합니다.
         inputs = self.tokenizing(data)
-
+        
+        return inputs, targets
         return inputs, targets
 
     def setup(self, stage='fit'):
@@ -318,7 +335,7 @@ if __name__ == '__main__':
     model_name = model_name
     wandb_logger = WandbLogger(
         log_model="all",
-        name=f'{model_name.replace("/","-")}_{hyperparameter_config["batch_size"]}_{hyperparameter_config["learning_rate"]:.3e}_{hyperparameter_config["loss"]}_{date}_swap_and_rtt',
+        name=f'{model_name.replace("/","-")}_{hyperparameter_config["batch_size"]}_{hyperparameter_config["learning_rate"]:.3e}_{hyperparameter_config["loss"]}_{date}_oversample',
         project=wandb_config["project"]+'_'+hyperparameter_config["loss"], 
         entity=wandb_config["entity"]
     )
@@ -340,4 +357,4 @@ if __name__ == '__main__':
     trainer.test(model=model, datamodule=dataloader)
 
     # 학습이 완료된 모델을 저장합니다.
-    torch.save(model, "./model/" + model_name.replace("/","-")+'_'+hyperparameter_config["loss"]+'swap_rtt_base.pt')
+    torch.save(model, "./model/" + model_name.replace("/","-")+'_'+hyperparameter_config["loss"]+'oversample_base.pt')

@@ -1,5 +1,5 @@
 ,Unnamed: 0.1,Unnamed: 0,id,source,sentence_1,sentence_2,label,binary-label
-0,0,0,boostcamp-sts-v1-train-000,nsmc-sampled-s1-rtted,"스릴과 반전이 있고, 여타 쓰레기 같은 한국영화와는 차원이 다르다.","반전도 있고,사랑도 있고재미도있네요.",2.2,0.0
+0,0,0,boostcamp-sts-v1-train-000,nsmc-sampled-s1-rtted,"스릴과 반전이 있고, 여타 쓰레기 같은 한국영화와는 차원이 다르다.","반전도 있고,사랑도 있고재미도있네요.",2.1,0.0
 1,2,2,boostcamp-sts-v1-train-002,petition-sampled-s1-rtted,입주신청 조건을 변경해 주세요.,주택청약 무주택기준 변경해주세요.,2.4,0.0
 2,4,4,boostcamp-sts-v1-train-004,slack-sampled-s1-rtted,정말 자랑스럽습니다!!,꼬옥 실제로 한번 뵈어요 뿌뿌뿌~!~!,0.0,0.0
 3,7,7,boostcamp-sts-v1-train-007,nsmc-sampled-s1-rtted,이렇게 귀여운 쥐는 처음 봅니다.,이렇게 지겨운 공포영화는 처음..,0.6,0.0

@@ -318,7 +318,7 @@ if __name__ == '__main__':
     model_name = model_name
     wandb_logger = WandbLogger(
         log_model="all",
-        name=f'{model_name.replace("/","-")}_{hyperparameter_config["batch_size"]}_{hyperparameter_config["learning_rate"]:.3e}_{hyperparameter_config["loss"]}_{date}_swapping',
+        name=f'{model_name.replace("/","-")}_{hyperparameter_config["batch_size"]}_{hyperparameter_config["learning_rate"]:.3e}_{hyperparameter_config["loss"]}_{date}_swap_and_rtt',
         project=wandb_config["project"]+'_'+hyperparameter_config["loss"], 
         entity=wandb_config["entity"]
     )
@@ -340,4 +340,4 @@ if __name__ == '__main__':
     trainer.test(model=model, datamodule=dataloader)
 
     # 학습이 완료된 모델을 저장합니다.
-    torch.save(model, "./model/" + model_name.replace("/","-")+'_'+hyperparameter_config["loss"]+'_base.pt')
+    torch.save(model, "./model/" + model_name.replace("/","-")+'_'+hyperparameter_config["loss"]+'swap_rtt_base.pt')

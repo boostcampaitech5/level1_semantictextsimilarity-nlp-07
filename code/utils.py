@@ -65,7 +65,10 @@ def set_checkpoint_config(args):
 
 def extract_val_pearson(file_name):
     # Extract the val_pearson value from the file name
-    val_pearson = float(file_name.split("val_pearson=")[1].split(".ckpt")[0])
+    try:
+        val_pearson = float(file_name.split("val_pearson=")[1].split(".ckpt")[0])
+    except:
+        val_pearson = -1
     return val_pearson
 
 def working_directory_match(word):

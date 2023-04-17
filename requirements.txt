@@ -1,5 +1,5 @@
 pyYAML==5.4.1
-pytorch-lightning==1.7.3
+pytorch-lightning==2.0.1
 tqdm==4.64.1
 torchmetrics==0.10.0
 torch==1.12.1

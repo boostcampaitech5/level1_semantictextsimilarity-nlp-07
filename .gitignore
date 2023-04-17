@@ -6,9 +6,20 @@
 
 # log
 /lightning_logs
+/code/lightning_logs
+
+# checkpoints
+/checkpoints
 
 # output
 /output
 
 # wandb
 /wandb
+/code/wandb
+
+# pycache
+/code/__pycache__
+
+# config.json
+/config.json

@@ -332,13 +332,18 @@ if __name__ == '__main__':
     vocab_size = len(dataloader.tokenizer)
     print("LL", vocab_size)
 
+    
+
     checkpoint_file = False
     if checkpoint_config["checkpoint_use"]=="True":
         if checkpoint_config["checkpoint_name"] != "":
             checkpoint_file = "./checkpoints/" + checkpoint_config['checkpoint_name']
         else:
-            checkpoint_pattern = f"./checkpoints/*.ckpt"
-            checkpoint_files = glob.glob(checkpoint_pattern)
+            checkpoint_pattern = "./checkpoints/*.ckpt"
+            exclude_pattern = "*last*"
+            exclude_files = glob.glob(checkpoint_pattern.replace("*", exclude_pattern))
+            checkpoint_files = [f for f in glob.glob(checkpoint_pattern) if f not in exclude_files]
+
             if checkpoint_files:
                 # Sort the list of checkpoint files by val_pearson in descending order
                 if checkpoint_config["checkpoint_new_or_best"].lower() == "best":

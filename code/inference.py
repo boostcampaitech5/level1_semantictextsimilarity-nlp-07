@@ -192,7 +192,6 @@ if __name__ == '__main__':
     parser.add_argument('--shuffle', default=True)
     
     parser.add_argument('--data_path', default='./data/', type=str)
-    parser.add_argument('--loss', default='L1', type=str)
     args = parser.parse_args()
 
     train_path = args.data_path + 'train.csv'

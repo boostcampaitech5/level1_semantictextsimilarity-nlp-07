@@ -1,3 +1,4 @@
+from imblearn.over_sampling import RandomOverSampler
 import argparse
 import datetime
 import os
@@ -127,15 +128,31 @@ class Dataloader(pl.LightningDataModule):
     def preprocessing(self, data):
         # 안쓰는 컬럼을 삭제합니다.
         data = data.drop(columns=self.delete_columns)
-
-        # 타겟 데이터가 없으면 빈 배열을 리턴합니다.
+        
+        # train data라면 random oversampling을 사용합니다.
+        if data['sentence_1'][0] == '스릴도있고 반전도 있고 여느 한국영화 쓰레기들하고는 차원이 다르네요~':
+            num = 10
+            all_ = data[(data['label'] >= (5/num)*(num-1)) & (data['label'] <= (5/num)*(num))]
+            all_['semi-label'] = num-1
+            for n in range(num-1):
+                new = data[(data['label'] >= (5/num)*n) & (data['label'] < (5/num)*(n+1))]
+                new['semi-label'] = n
+                all_ = pd.concat([all_, new])
+            temp_train_inputs = all_.loc[:, ['sentence_1', 'sentence_2', 'label']]
+            temp_train_targets = all_['semi-label']
+            ros = RandomOverSampler(random_state=42, sampling_strategy='all')
+            train_inputs_resampled, train_targets_resampled = ros.fit_resample(temp_train_inputs, temp_train_targets)
+            data = train_inputs_resampled
+        
+       # 타겟 데이터가 없으면 빈 배열을 리턴합니다.
         try:
             targets = data[self.target_columns].values.tolist()
         except:
             targets = []
         # 텍스트 데이터를 전처리합니다.
         inputs = self.tokenizing(data)
-
+        
+        return inputs, targets
         return inputs, targets
 
     def setup(self, stage='fit'):
@@ -259,12 +276,52 @@ class Model(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr)
-        lr_scheduler = InverseSqrtScheduler(optimizer, self.hparams.warmup_steps)
-        sch_config = {
-		"scheduler": lr_scheduler,
-		"interval": "step",
-	    }
-        return [optimizer], [sch_config]
+       
+        return [optimizer]
+
+def set_model_name(args):
+    if args.config:
+        with open(args.config) as json_data:
+            data = json.load(json_data)
+        return data["model"]
+    else:
+        return args.model_name
+
+def set_hyperparameter_config(args):
+    hyperparameter_config = defaultdict()
+    if args.config:
+        with open(args.config) as json_data:
+            data = json.load(json_data)
+        hyperparameter_config["batch_size"] = data["hyperparameter"]["batch_size"]
+        hyperparameter_config["max_epoch"] = data["hyperparameter"]["max_epoch"]
+        hyperparameter_config["learning_rate"] = data["hyperparameter"]["learning_rate"]
+        hyperparameter_config["loss"] = data["hyperparameter"]["loss"]
+        hyperparameter_config["shuffle"] = data["hyperparameter"]["shuffle"]
+    else:
+        hyperparameter_config["batch_size"] = args.batch_size
+        hyperparameter_config["max_epoch"] = args.max_epoch
+        hyperparameter_config["learning_rate"] = args.loss
+        hyperparameter_config["loss"] = args.wandb_project
+        hyperparameter_config["shuffle"] = args.shuffle
+    
+    return hyperparameter_config
+
+def set_wandb_config(args):
+    wandb_config = defaultdict()
+    if args.config:
+        with open(args.config) as json_data:
+            data = json.load(json_data)
+        wandb_config["username"] = data["wandb"]["username"]
+        wandb_config["entity"] = data["wandb"]["entity"]
+        wandb_config["key"] = data["wandb"]["key"]
+        wandb_config["project"] = data["wandb"]["project"]
+    else:
+        wandb_config["username"] = args.wandb_username
+        wandb_config["entity"] = args.wandb_entity
+        wandb_config["key"] = args.wandb_key
+        wandb_config["project"] = args.wandb_project
+    
+    return wandb_config
 
 if __name__ == '__main__':    
     # 하이퍼 파라미터 등 각종 설정값을 입력받습니다
@@ -346,7 +403,7 @@ if __name__ == '__main__':
     model_name = model_name
     wandb_logger = WandbLogger(
         log_model="all",
-        name=f'{model_name.replace("/","-")}_{hyperparameter_config["batch_size"]}_{hyperparameter_config["learning_rate"]:.3e}_{hyperparameter_config["loss"]}_{date}',
+        name=f'{model_name.replace("/","-")}_{hyperparameter_config["batch_size"]}_{hyperparameter_config["learning_rate"]:.3e}_{hyperparameter_config["loss"]}_{date}_oversample',
         project=wandb_config["project"]+'_'+hyperparameter_config["loss"], 
         entity=wandb_config["entity"]
     )
@@ -384,3 +441,6 @@ if __name__ == '__main__':
     # Train part
     trainer.fit(model=model, datamodule=dataloader)
     trainer.test(model=model, datamodule=dataloader)
+
+    # 학습이 완료된 모델을 저장합니다.
+    torch.save(model, "./model/" + model_name.replace("/","-")+'_'+hyperparameter_config["loss"]+'oversample_base.pt')

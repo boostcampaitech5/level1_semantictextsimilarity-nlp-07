@@ -10,7 +10,7 @@
     },
     "checkpoint": {
         "checkpoint_use": "True",
-        "checkpoint_name": "null",
+        "checkpoint_name": "",
         "checkpoint_new_or_best": "best"
     },
     "wandb": {

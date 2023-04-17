@@ -5,12 +5,18 @@
         "max_epoch": 1,
         "learning_rate": 1e-5,
         "loss": "L1",
-        "shuffle": true
+        "shuffle": true,
+        "oversampling": true
+    },
+    "checkpoint": {
+        "checkpoint_use": "True",
+        "checkpoint_name": "null",
+        "checkpoint_new_or_best": "best"
     },
     "wandb": {
         "username": "",
         "entity": "",
-        "key": "",
+        "key": "key",
         "project": "STS"
     }
 }

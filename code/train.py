@@ -1,27 +1,74 @@
 import argparse
 import datetime
 import os
-import json
-from collections import defaultdict
 
 import pandas as pd
 
 from tqdm.auto import tqdm
+from collections import Counter
 
 import transformers
 import torch
 import torchmetrics
 import pytorch_lightning as pl
-
 # 2023-04-10 모듈 로딩 추가, callback, wandb
 import wandb
 import numpy as np
 import random
 
+from torch.utils.data.sampler import Sampler
+
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import WandbLogger
 
+from utils import extract_val_pearson
+from utils import set_model_name
+from utils import set_hyperparameter_config
+from utils import set_checkpoint_config
+from utils import set_wandb_config
+import glob
+
+class OverSampler(Sampler):
+    """Over Sampling Sampler
+    providing uniform distribution of target labels in each batch
+    """
+    def __init__(self, targets):
+        """
+        Arguments
+        ---------
+        targets
+            a list of class labels
+        """
+        self.targets = targets
+        self.num_samples = len(targets)
+        self.indices = list(range(len(targets)))
+        target_list = targets
+        target_bin = np.floor(np.array(targets) * 2.0) / 2.0
+        bin_count = Counter(target_bin.reshape(-1))
+        # 0.5 단위로 binning하되, 5.0은 4.5로 분류되게끔 처리
+        bin_count[4.5] += bin_count[5.0]
+        bin_count[5.0] = bin_count[4.5]
+        # 각 데이터 샘플이 뽑힐 확률에 대한 가중치를 weights로 저장.
+        # np.sum(weights) != 1.0 이어도 됩니다. 
+        weights = [1.0 / bin_count[np.floor(2.0*label[0])/2.0] for label in targets]
+
+        self.weights = torch.DoubleTensor(weights)
+
+    def __iter__(self):
+        count = 0
+        index = [self.indices[i] for i in torch.multinomial(
+            self.weights, self.num_samples, replacement=True
+        )]
+        while count < self.num_samples:
+            yield index[count] 
+            count += 1
+            
+        # return (self.indices[i] for i in torch.multinomial(
+        #     self.weights, self.batch_size, replacement=True))
+
+    def __len__(self):
+        return self.num_samples
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, inputs, targets=[]):
@@ -42,7 +89,7 @@ class Dataset(torch.utils.data.Dataset):
 
 
 class Dataloader(pl.LightningDataModule):
-    def __init__(self, model_name, batch_size, shuffle, train_path, dev_path, test_path, predict_path):
+    def __init__(self, model_name, batch_size, shuffle, train_path, dev_path, test_path, predict_path, oversampling=False):
         super().__init__()
         self.model_name = model_name
         self.batch_size = batch_size
@@ -57,6 +104,10 @@ class Dataloader(pl.LightningDataModule):
         self.val_dataset = None
         self.test_dataset = None
         self.predict_dataset = None
+        
+        self.oversampling = oversampling
+        if oversampling:
+            print("NOTICE: Oversampling activated")
 
         self.tokenizer = transformers.AutoTokenizer.from_pretrained(model_name, max_length=160)
         self.target_columns = ['label']
@@ -113,7 +164,13 @@ class Dataloader(pl.LightningDataModule):
             self.predict_dataset = Dataset(predict_inputs, [])
 
     def train_dataloader(self):
-        return torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=args.shuffle)
+        if self.oversampling:
+            sampler = OverSampler(self.train_dataset.targets)
+            return torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, 
+                                               sampler=sampler, 
+                                               drop_last=False)
+        else:
+            return torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=self.shuffle)
 
     def val_dataloader(self):
         return torch.utils.data.DataLoader(self.val_dataset, batch_size=self.batch_size)
@@ -132,7 +189,7 @@ class Model(pl.LightningModule):
 
         self.model_name = model_name
         self.lr = lr
-
+        
         # 사용할 모델을 호출합니다.
         self.plm = transformers.AutoModelForSequenceClassification.from_pretrained(
             pretrained_model_name_or_path=model_name, num_labels=1)
@@ -163,6 +220,7 @@ class Model(pl.LightningModule):
         loss = self.loss_func(logits, y.float())
         self.log("val_loss", loss)
 
+        val_pearson = torchmetrics.functional.pearson_corrcoef(logits.squeeze(), y.squeeze())
         self.log("val_pearson", torchmetrics.functional.pearson_corrcoef(logits.squeeze(), y.squeeze()))
 #        self.log("val_spearman", torchmetrics.functional.spearman_corrcoef(logits.squeeze(), y.squeeze()))
 
@@ -185,50 +243,6 @@ class Model(pl.LightningModule):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr)
         return optimizer
 
-def set_model_name(args):
-    if args.config:
-        with open(args.config) as json_data:
-            data = json.load(json_data)
-        return data["model"]
-    else:
-        return args.model_name
-
-def set_hyperparameter_config(args):
-    hyperparameter_config = defaultdict()
-    if args.config:
-        with open(args.config) as json_data:
-            data = json.load(json_data)
-        hyperparameter_config["batch_size"] = data["hyperparameter"]["batch_size"]
-        hyperparameter_config["max_epoch"] = data["hyperparameter"]["max_epoch"]
-        hyperparameter_config["learning_rate"] = data["hyperparameter"]["learning_rate"]
-        hyperparameter_config["loss"] = data["hyperparameter"]["loss"]
-        hyperparameter_config["shuffle"] = data["hyperparameter"]["shuffle"]
-    else:
-        hyperparameter_config["batch_size"] = args.batch_size
-        hyperparameter_config["max_epoch"] = args.max_epoch
-        hyperparameter_config["learning_rate"] = args.loss
-        hyperparameter_config["loss"] = args.wandb_project
-        hyperparameter_config["shuffle"] = args.shuffle
-    
-    return hyperparameter_config
-
-def set_wandb_config(args):
-    wandb_config = defaultdict()
-    if args.config:
-        with open(args.config) as json_data:
-            data = json.load(json_data)
-        wandb_config["username"] = data["wandb"]["username"]
-        wandb_config["entity"] = data["wandb"]["entity"]
-        wandb_config["key"] = data["wandb"]["key"]
-        wandb_config["project"] = data["wandb"]["project"]
-    else:
-        wandb_config["username"] = args.wandb_username
-        wandb_config["entity"] = args.wandb_entity
-        wandb_config["key"] = args.wandb_key
-        wandb_config["project"] = args.wandb_project
-    
-    return wandb_config
-
 if __name__ == '__main__':    
     # 하이퍼 파라미터 등 각종 설정값을 입력받습니다
     # 터미널 실행 예시 : python3 run.py --batch_size=64 ...
@@ -236,11 +250,16 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_name', default='klue/roberta-small', type=str)
 
+    parser.add_argument('--checkpoint_use', default="True", type=str, help="True/False")
+    parser.add_argument('--checkpoint_name', default=None, type=str)
+    parser.add_argument('--checkpoint_new_or_best', default='new', help="input new or best")
+
     parser.add_argument('--batch_size', default=16, type=int)
     parser.add_argument('--max_epoch', default=5, type=int)
     parser.add_argument('--learning_rate', default=1e-5, type=float)
     parser.add_argument('--loss', default='L1', type=str)
     parser.add_argument('--shuffle', default=True)
+    parser.add_argument('--oversampling', default=True, type=bool)
 
     parser.add_argument('--data_path', default='./data/', type=str)
     parser.add_argument('--train_path', default='./data/train.csv')
@@ -272,9 +291,10 @@ if __name__ == '__main__':
         torch.backends.cudnn.benchmark = False
         np.random.seed(global_seed)
         random.seed(global_seed)
-
+    
     model_name = set_model_name(args)
     hyperparameter_config = set_hyperparameter_config(args)
+    checkpoint_config = set_checkpoint_config(args)
     wandb_config = set_wandb_config(args)
 
     # 2023-04-10: 모델에 대한 Callback을 추가합니다.
@@ -284,13 +304,16 @@ if __name__ == '__main__':
                                   save_last=True,           # last.ckpt 로 저장됨
                                   save_top_k=1,             # k개의 최고 성능 체크 포인트를 저장하겠다.
                                   save_weights_only=True,   # Weight만 저장할지, 학습 관련 정보도 저장할지 여부.
-                                  mode='max'                # 'max' : monitor metric이 증가하면 저장.
+                                  mode='max',                # 'max' : monitor metric이 증가하면 저장.
+                                  dirpath='./checkpoints',
+                                  filename=f'{model_name.replace("/","-")}-' + 'sts-{epoch}-{val_pearson:.3f}',
                                   )
+
     early_stop_callback = EarlyStopping(monitor='val_pearson', 
-                                        patience=2,         # 2번 이상 validation 성능이 안좋아지면 early stop
+                                        patience=5,         # 2번 이상 validation 성능이 안좋아지면 early stop
                                         mode='max'          # 'max' : monitor metric은 최대화되어야 함.
                                         )
-
+    
     # dataloader와 model을 생성합니다.
     # dataloader = Dataloader(args.model_name, args.batch_size, args.shuffle, args.train_path, args.dev_path,
     #                         args.test_path, args.predict_path)
@@ -305,21 +328,36 @@ if __name__ == '__main__':
         entity=wandb_config["entity"]
     )
     dataloader = Dataloader(model_name, hyperparameter_config["batch_size"], hyperparameter_config["shuffle"], train_path, dev_path, 
-                                    test_path, predict_path)
+                                    test_path, predict_path, oversampling=hyperparameter_config["oversampling"])
     vocab_size = len(dataloader.tokenizer)
     print("LL", vocab_size)
-    model = Model(model_name, hyperparameter_config["learning_rate"], vocab_size, hyperparameter_config["loss"])
 
+    checkpoint_file = False
+    if checkpoint_config["checkpoint_use"]=="True":
+        if checkpoint_config["checkpoint_name"] != "":
+            checkpoint_file = "./checkpoints/" + checkpoint_config['checkpoint_name']
+        else:
+            checkpoint_pattern = f"./checkpoints/*.ckpt"
+            checkpoint_files = glob.glob(checkpoint_pattern)
+            # Sort the list of checkpoint files by val_pearson in descending order
+            if checkpoint_config["checkpoint_new_or_best"].lower() == "best":
+                checkpoint_files = sorted(checkpoint_files, key=extract_val_pearson, reverse=True)
+            else:
+                checkpoint_files = sorted(checkpoint_files, key=os.path.getctime, reverse=True)
+            checkpoint_file = checkpoint_files[0]
 
-    # # gpu가 없으면 accelerator='cpu', 있으면 accelerator='gpu'
-    trainer = pl.Trainer(accelerator='gpu', max_epochs=hyperparameter_config["max_epoch"], log_every_n_steps=1,
-                         callbacks=[cp_callback, early_stop_callback],  # 2023-04-10: callback 추가
-                         logger=wandb_logger
-                         )
+    if not checkpoint_file:
+        model = Model(model_name, hyperparameter_config['learning_rate'], vocab_size, hyperparameter_config['loss'])
+        trainer = pl.Trainer(accelerator='gpu', max_epochs=hyperparameter_config["max_epoch"], log_every_n_steps=1, 
+                             callbacks=[cp_callback, early_stop_callback], 
+                             logger=wandb_logger)
+    else:
+        # gpu가 없으면 'gpus=0'을, gpu가 여러개면 'gpus=4'처럼 사용하실 gpu의 개수를 입력해주세요
+        model = Model.load_from_checkpoint(checkpoint_file)
+        trainer = pl.Trainer(accelerator='gpu', max_epochs=hyperparameter_config["max_epoch"], resume_from_checkpoint=checkpoint_file, 
+                             log_every_n_steps=1, callbacks=[cp_callback, early_stop_callback],
+                               logger=wandb_logger)
 
     # Train part
     trainer.fit(model=model, datamodule=dataloader)
     trainer.test(model=model, datamodule=dataloader)
-
-    # 학습이 완료된 모델을 저장합니다.
-    torch.save(model, "./model/" + model_name.replace("/","-")+'_'+hyperparameter_config["loss"]+'_base.pt')

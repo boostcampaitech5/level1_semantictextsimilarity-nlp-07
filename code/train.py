@@ -303,7 +303,7 @@ if __name__ == '__main__':
                                   verbose=False,            # 중간 출력문을 출력할지 여부. False 시, 없음.
                                   save_last=True,           # last.ckpt 로 저장됨
                                   save_top_k=1,             # k개의 최고 성능 체크 포인트를 저장하겠다.
-                                  save_weights_only=True,   # Weight만 저장할지, 학습 관련 정보도 저장할지 여부.
+                                  save_weights_only=False,   # Weight만 저장할지, 학습 관련 정보도 저장할지 여부.
                                   mode='max',                # 'max' : monitor metric이 증가하면 저장.
                                   dirpath='./checkpoints',
                                   filename=f'{model_name.replace("/","-")}-' + 'sts-{epoch}-{val_pearson:.3f}',
@@ -339,12 +339,13 @@ if __name__ == '__main__':
         else:
             checkpoint_pattern = f"./checkpoints/*.ckpt"
             checkpoint_files = glob.glob(checkpoint_pattern)
-            # Sort the list of checkpoint files by val_pearson in descending order
-            if checkpoint_config["checkpoint_new_or_best"].lower() == "best":
-                checkpoint_files = sorted(checkpoint_files, key=extract_val_pearson, reverse=True)
-            else:
-                checkpoint_files = sorted(checkpoint_files, key=os.path.getctime, reverse=True)
-            checkpoint_file = checkpoint_files[0]
+            if checkpoint_files:
+                # Sort the list of checkpoint files by val_pearson in descending order
+                if checkpoint_config["checkpoint_new_or_best"].lower() == "best":
+                    checkpoint_files = sorted(checkpoint_files, key=extract_val_pearson, reverse=True)
+                else:
+                    checkpoint_files = sorted(checkpoint_files, key=os.path.getctime, reverse=True)
+                checkpoint_file = checkpoint_files[0]
 
     if not checkpoint_file:
         model = Model(model_name, hyperparameter_config['learning_rate'], vocab_size, hyperparameter_config['loss'])

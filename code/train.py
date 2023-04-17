@@ -337,14 +337,15 @@ if __name__ == '__main__':
         if checkpoint_config["checkpoint_name"] != "":
             checkpoint_file = "./checkpoints/" + checkpoint_config['checkpoint_name']
         else:
-            checkpoint_pattern = f"./checkpoints/*.ckpt"
-            checkpoint_files = glob.glob(checkpoint_pattern)
-            # Sort the list of checkpoint files by val_pearson in descending order
-            if checkpoint_config["checkpoint_new_or_best"].lower() == "best":
-                checkpoint_files = sorted(checkpoint_files, key=extract_val_pearson, reverse=True)
-            else:
-                checkpoint_files = sorted(checkpoint_files, key=os.path.getctime, reverse=True)
-            checkpoint_file = checkpoint_files[0]
+            if checkpoint_files:
+                checkpoint_pattern = f"./checkpoints/*.ckpt"
+                checkpoint_files = glob.glob(checkpoint_pattern)
+                # Sort the list of checkpoint files by val_pearson in descending order
+                if checkpoint_config["checkpoint_new_or_best"].lower() == "best":
+                    checkpoint_files = sorted(checkpoint_files, key=extract_val_pearson, reverse=True)
+                else:
+                    checkpoint_files = sorted(checkpoint_files, key=os.path.getctime, reverse=True)
+                checkpoint_file = checkpoint_files[0]
 
     if not checkpoint_file:
         model = Model(model_name, hyperparameter_config['learning_rate'], vocab_size, hyperparameter_config['loss'])

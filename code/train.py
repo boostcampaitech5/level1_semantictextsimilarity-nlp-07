@@ -301,7 +301,7 @@ if __name__ == '__main__':
     # Pytorch Lightning에서 지원하는 Model Checkpoint 저장 및 EarlyStopping을 추가해줍니다.
     cp_callback = ModelCheckpoint(monitor='val_pearson',    # Pearson coefficient를 기준으로 저장
                                   verbose=False,            # 중간 출력문을 출력할지 여부. False 시, 없음.
-                                  save_last=True,           # last.ckpt 로 저장됨
+                                  save_last=False,           # last.ckpt 로 저장됨
                                   save_top_k=1,             # k개의 최고 성능 체크 포인트를 저장하겠다.
                                   save_weights_only=False,   # Weight만 저장할지, 학습 관련 정보도 저장할지 여부.
                                   mode='max',                # 'max' : monitor metric이 증가하면 저장.

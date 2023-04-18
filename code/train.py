@@ -249,11 +249,7 @@ if __name__ == '__main__':
     # 실행 시 '--batch_size=64' 같은 인자를 입력하지 않으면 default 값이 기본으로 실행됩니다
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_name', default='klue/roberta-small', type=str)
-
-    parser.add_argument('--checkpoint_use', default="True", type=str, help="True/False")
     parser.add_argument('--checkpoint_name', default=None, type=str)
-    parser.add_argument('--checkpoint_new_or_best', default='new', help="input new or best")
-
     parser.add_argument('--batch_size', default=16, type=int)
     parser.add_argument('--max_epoch', default=5, type=int)
     parser.add_argument('--learning_rate', default=1e-5, type=float)
@@ -301,7 +297,7 @@ if __name__ == '__main__':
     # Pytorch Lightning에서 지원하는 Model Checkpoint 저장 및 EarlyStopping을 추가해줍니다.
     cp_callback = ModelCheckpoint(monitor='val_pearson',    # Pearson coefficient를 기준으로 저장
                                   verbose=False,            # 중간 출력문을 출력할지 여부. False 시, 없음.
-                                  save_last=True,           # last.ckpt 로 저장됨
+                                  save_last=False,           # last.ckpt 로 저장됨
                                   save_top_k=1,             # k개의 최고 성능 체크 포인트를 저장하겠다.
                                   save_weights_only=False,   # Weight만 저장할지, 학습 관련 정보도 저장할지 여부.
                                   mode='max',                # 'max' : monitor metric이 증가하면 저장.
@@ -332,32 +328,18 @@ if __name__ == '__main__':
     vocab_size = len(dataloader.tokenizer)
     print("LL", vocab_size)
 
-    checkpoint_file = False
-    if checkpoint_config["checkpoint_use"]=="True":
-        if checkpoint_config["checkpoint_name"] != "":
-            checkpoint_file = "./checkpoints/" + checkpoint_config['checkpoint_name']
-        else:
-            checkpoint_pattern = f"./checkpoints/*.ckpt"
-            checkpoint_files = glob.glob(checkpoint_pattern)
-            if checkpoint_files:
-                # Sort the list of checkpoint files by val_pearson in descending order
-                if checkpoint_config["checkpoint_new_or_best"].lower() == "best":
-                    checkpoint_files = sorted(checkpoint_files, key=extract_val_pearson, reverse=True)
-                else:
-                    checkpoint_files = sorted(checkpoint_files, key=os.path.getctime, reverse=True)
-                checkpoint_file = checkpoint_files[0]
-
-    if not checkpoint_file:
-        model = Model(model_name, hyperparameter_config['learning_rate'], vocab_size, hyperparameter_config['loss'])
-        trainer = pl.Trainer(accelerator='gpu', max_epochs=hyperparameter_config["max_epoch"], log_every_n_steps=1, 
-                             callbacks=[cp_callback, early_stop_callback], 
-                             logger=wandb_logger)
-    else:
+    if checkpoint_config["checkpoint_name"] != "":
+        checkpoint_file = "./checkpoints/" + checkpoint_config['checkpoint_name']
         # gpu가 없으면 'gpus=0'을, gpu가 여러개면 'gpus=4'처럼 사용하실 gpu의 개수를 입력해주세요
         model = Model.load_from_checkpoint(checkpoint_file)
         trainer = pl.Trainer(accelerator='gpu', max_epochs=hyperparameter_config["max_epoch"], resume_from_checkpoint=checkpoint_file, 
                              log_every_n_steps=1, callbacks=[cp_callback, early_stop_callback],
                                logger=wandb_logger)
+    else:
+        model = Model(model_name, hyperparameter_config['learning_rate'], vocab_size, hyperparameter_config['loss'])
+        trainer = pl.Trainer(accelerator='gpu', max_epochs=hyperparameter_config["max_epoch"], log_every_n_steps=1, 
+                             callbacks=[cp_callback, early_stop_callback], 
+                             logger=wandb_logger)
 
     # Train part
     trainer.fit(model=model, datamodule=dataloader)

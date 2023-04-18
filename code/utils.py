@@ -53,12 +53,8 @@ def set_checkpoint_config(args):
     if args.config:
         with open(args.config) as json_data:
             data = json.load(json_data)
-        checkpoint_config["checkpoint_use"] = data["checkpoint"]["checkpoint_use"]
-        checkpoint_config["checkpoint_new_or_best"] = data["checkpoint"]["checkpoint_new_or_best"]
         checkpoint_config["checkpoint_name"] = data["checkpoint"]["checkpoint_name"]
     else:
-        checkpoint_config["checkpoint_checkpoint"] = args.checkpoint_use
-        checkpoint_config["checkpoint_new_or_best"] = args.checkpoint_new_or_best
         checkpoint_config["checkpoint_name"] = args.checkpoint_name
     
     return checkpoint_config

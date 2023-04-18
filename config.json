@@ -1,17 +1,15 @@
 {
-    "model": "klue/roberta-small",
+    "model": "snunlp/KR-ELECTRA-discriminator",
     "hyperparameter": {
         "batch_size": 16,
-        "max_epoch": 1,
+        "max_epoch": 20,
         "learning_rate": 1e-5,
         "loss": "L1",
         "shuffle": true,
         "oversampling": true
     },
     "checkpoint": {
-        "checkpoint_use": "True",
-        "checkpoint_name": "null",
-        "checkpoint_new_or_best": "best"
+        "checkpoint_name": ""
     },
     "wandb": {
         "username": "",

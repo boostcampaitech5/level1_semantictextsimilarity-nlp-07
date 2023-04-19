@@ -4,7 +4,7 @@
         "batch_size": 16,
         "max_epoch": 20,
         "learning_rate": 1e-5,
-        "loss": "L1",
+        "loss": "MSE",
         "shuffle": true,
         "oversampling": true
     },
@@ -15,6 +15,6 @@
         "username": "",
         "entity": "",
         "key": "key",
-        "project": "STS"
+        "project": "STS!"
     }
 }

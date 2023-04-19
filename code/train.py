@@ -267,9 +267,9 @@ if __name__ == '__main__':
     parser.add_argument('--predict_path', default='./data/test.csv')
     parser.add_argument('--random_seed', default=False, type=bool)
 
-    parser.add_argument('--wandb_username', default='koppie3248')
-    parser.add_argument('--wandb_entity', default='koppie3248')
-    parser.add_argument('--wandb_key', default='65f6d9732a1ebd069fdf0a9064f0035642e391a0')
+    parser.add_argument('--wandb_username', default='username')
+    parser.add_argument('--wandb_entity', default='username')
+    parser.add_argument('--wandb_key', default='key')
     parser.add_argument('--wandb_project', default='STS!')
     parser.add_argument('--config', default=False, type=str, help='config file')
 

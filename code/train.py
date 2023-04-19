@@ -43,15 +43,18 @@ class OverSampler(Sampler):
         self.targets = targets
         self.num_samples = len(targets)
         self.indices = list(range(len(targets)))
-        target_list = targets
-        target_bin = np.floor(np.array(targets) * 2.0) / 2.0
+
+        division = 3
+        epsilon = 1e-3
+        num = 5/division-epsilon
+        # division 개수만큼 binning (label==0인 경우는 따로 binning)
+        # ex. division==3이라면 0 / 0.2 0.4 0.6 / 0.8 1.0 1.2 / ... / 5.0 
+        target_bin = np.ceil(np.array(targets) * num)
         bin_count = Counter(target_bin.reshape(-1))
-        # 0.5 단위로 binning하되, 5.0은 4.5로 분류되게끔 처리
-        bin_count[4.5] += bin_count[5.0]
-        bin_count[5.0] = bin_count[4.5]
+
         # 각 데이터 샘플이 뽑힐 확률에 대한 가중치를 weights로 저장.
         # np.sum(weights) != 1.0 이어도 됩니다. 
-        weights = [1.0 / bin_count[np.floor(2.0*label[0])/2.0] for label in targets]
+        weights = [1.0 / bin_count[np.ceil(num*label[0])] for label in targets]
 
         self.weights = torch.DoubleTensor(weights)
 
@@ -248,12 +251,12 @@ if __name__ == '__main__':
     # 터미널 실행 예시 : python3 run.py --batch_size=64 ...
     # 실행 시 '--batch_size=64' 같은 인자를 입력하지 않으면 default 값이 기본으로 실행됩니다
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_name', default='klue/roberta-small', type=str)
-    parser.add_argument('--checkpoint_name', default=None, type=str)
+    parser.add_argument('--model_name', default='snunlp/KR-ELECTRA-discriminator', type=str)
+    parser.add_argument('--checkpoint_name', default="", type=str)
     parser.add_argument('--batch_size', default=16, type=int)
     parser.add_argument('--max_epoch', default=5, type=int)
     parser.add_argument('--learning_rate', default=1e-5, type=float)
-    parser.add_argument('--loss', default='L1', type=str)
+    parser.add_argument('--loss', default='MSE', type=str)
     parser.add_argument('--shuffle', default=True)
     parser.add_argument('--oversampling', default=True, type=bool)
 
@@ -264,10 +267,10 @@ if __name__ == '__main__':
     parser.add_argument('--predict_path', default='./data/test.csv')
     parser.add_argument('--random_seed', default=False, type=bool)
 
-    parser.add_argument('--wandb_username', default='username')
-    parser.add_argument('--wandb_entity', default='username')
-    parser.add_argument('--wandb_key', default='key')
-    parser.add_argument('--wandb_project', default='STS')
+    parser.add_argument('--wandb_username', default='koppie3248')
+    parser.add_argument('--wandb_entity', default='koppie3248')
+    parser.add_argument('--wandb_key', default='65f6d9732a1ebd069fdf0a9064f0035642e391a0')
+    parser.add_argument('--wandb_project', default='STS!')
     parser.add_argument('--config', default=False, type=str, help='config file')
 
     date = datetime.datetime.now().strftime('%Y-%m-%d')
@@ -318,7 +321,7 @@ if __name__ == '__main__':
     wandb.login(key=wandb_config["key"])
     model_name = model_name
     wandb_logger = WandbLogger(
-        log_model="all",
+        log_model="False",
         name=f'{model_name.replace("/","-")}_{hyperparameter_config["batch_size"]}_{hyperparameter_config["learning_rate"]:.3e}_{hyperparameter_config["loss"]}_{date}',
         project=wandb_config["project"]+'_'+hyperparameter_config["loss"], 
         entity=wandb_config["entity"]

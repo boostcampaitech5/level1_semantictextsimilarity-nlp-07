@@ -4,7 +4,7 @@
         "batch_size": 16,
         "max_epoch": 20,
         "learning_rate": 1e-5,
-        "loss": "L1",
+        "loss": "MSE",
         "shuffle": true,
         "oversampling": true
     },
@@ -12,9 +12,9 @@
         "checkpoint_name": ""
     },
     "wandb": {
-        "username": "",
-        "entity": "",
-        "key": "key",
-        "project": "STS"
+        "username": "koppie3248",
+        "entity": "koppie3248",
+        "key": "65f6d9732a1ebd069fdf0a9064f0035642e391a0",
+        "project": "STS!"
     }
 }

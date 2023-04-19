@@ -24,8 +24,8 @@ def set_hyperparameter_config(args):
     else:
         hyperparameter_config["batch_size"] = args.batch_size
         hyperparameter_config["max_epoch"] = args.max_epoch
-        hyperparameter_config["learning_rate"] = args.loss
-        hyperparameter_config["loss"] = args.wandb_project
+        hyperparameter_config["learning_rate"] = args.learning_rate
+        hyperparameter_config["loss"] = args.loss
         hyperparameter_config["shuffle"] = args.shuffle
         hyperparameter_config["oversampling"] = args.oversampling
     

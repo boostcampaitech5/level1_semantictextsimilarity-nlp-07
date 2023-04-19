@@ -321,7 +321,7 @@ if __name__ == '__main__':
     wandb.login(key=wandb_config["key"])
     model_name = model_name
     wandb_logger = WandbLogger(
-        log_model="False",
+        log_model="all",
         name=f'{model_name.replace("/","-")}_{hyperparameter_config["batch_size"]}_{hyperparameter_config["learning_rate"]:.3e}_{hyperparameter_config["loss"]}_{date}',
         project=wandb_config["project"]+'_'+hyperparameter_config["loss"], 
         entity=wandb_config["entity"]

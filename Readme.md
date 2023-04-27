@@ -2,19 +2,18 @@
 
 ## Directory
 checkpoints   
-└── checkpoint_name.ckpt     
 code   
+├── inference_ensemble.py   
 ├── inference.py   
+├── train_sweep.py   
 ├── train.py   
 └── utils.py   
 data   
-├── dev.csv   
-├── test.csv   
-└── train.csv   
+document   
+├── images   
+└── 문장 간 유사도 측정 - 보고서.md   
 model   
-└── model.pt   
 output   
-├── output.csv   
 └── sample_submission.csv   
 .gitignore   
 config.json   
@@ -24,13 +23,13 @@ requirements.txt
 
 ## Usage
 1. setting(config.json 파일 사용 시)
-- config.json.tab -> config.json으로 만든 후 사용   
 - config.json 파일을 열어 필요한 사항을 확인
     - model
     - hyperparameter
         - 변경할 수 있는 값: batch_size, max_epoch, learning_rate, loss, shuffle
     - checkpoint
-        - 변경할 수 있는 값: checkpoint_use, checkpoint_name, checkpoint_new_or_best
+        - 변경할 수 있는 값: checkpoint_name
+        - checkpoint 파일 사용 시, checkpoints 폴더 안에 있는 파일 이름 입력
     - wandb
         - 변경할 수 있는 값: username, entity, key, project
         - username, entity, key는 빈 문자열로 되어 있으며 개인 정보를 wandb에서 확인 후 입력
@@ -49,10 +48,3 @@ requirements.txt
     > inference.py [-h] [--model_name MODEL_NAME] 
                     [--checkpoint_name CHECKPOINT_NAME] [--checkpoint_new_or_best CHECKPOINT_NEW_OR_BEST] 
                     [--batch_size BATCH_SIZE] [--max_epoch MAX_EPOCH] [--shuffle SHUFFLE] [--learning_rate LEARNING_RATE] [--data_path DATA_PATH]
-
-4. checkpoints
-- 기존의 model.pt -> checkpoint.ckpt로 대체
-- args 설명
-    -   checkpoint_use: checkpoint를 사용할 것인지의 여부 
-    -   checkpoint_name: checkpoint의 경로가 아닌 이름.ckpt
-    -   checkpoint_new_or_best: checkpoint_name 미지정시 최근 또는 최고의 모델 자동 선택 input: new, best
